@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 660 720" fill="none">
+<defs><pattern id="dots" width="9" height="9" patternUnits="userSpaceOnUse"><circle cx="2" cy="2" r="1" fill="#262c22" opacity=".15"/></pattern><linearGradient id="skin" x1="233" y1="140" x2="467" y2="430" gradientUnits="userSpaceOnUse"><stop stop-color="#f4c092"/><stop offset="1" stop-color="#d48c64"/></linearGradient><linearGradient id="shirt" x1="180" y1="460" x2="550" y2="720"><stop stop-color="#f16a51"/><stop offset="1" stop-color="#c74337"/></linearGradient></defs>
+<path d="M81 720c-9-119 14-208 118-249l101-38h89l96 37c98 34 129 126 119 250" fill="url(#shirt)" stroke="#292c25" stroke-width="7"/>
+<path d="M221 479c-11 58 39 96 109 96s113-33 108-90l-57-31-86-2z" fill="#b83f35" stroke="#292c25" stroke-width="5"/>
+<path d="M282 389l-12 95c13 51 105 61 137 0l-26-98" fill="url(#skin)" stroke="#292c25" stroke-width="6"/>
+<path d="M279 421c38 27 78 31 115 3l-9-27-101-3z" fill="#a66349"/>
+<path d="M238 257c-46-28-52 38-20 68l28 6m185-73c37-27 53 31 20 69l-20 3" fill="#e5a47b" stroke="#292c25" stroke-width="6"/>
+<path d="M235 256c-15-67-1-159 78-176 113-26 148 61 136 154l-9 97c-6 76-46 117-103 118-58 1-100-56-104-114z" fill="url(#skin)" stroke="#292c25" stroke-width="7"/>
+<path d="M251 174c43-25 98-22 143-4m-137 20c38-19 94-17 127-5m-106 19c24-8 66-8 91 0" stroke="#bc815c" stroke-width="4" stroke-linecap="round" opacity=".65"/>
+<path d="M254 143c17-28 46-40 76-40" stroke="#ffe0b1" stroke-width="10" stroke-linecap="round"/>
+<path d="M249 239c24-23 48-24 72-7" stroke="#68533e" stroke-width="13" stroke-linecap="round"/>
+<path d="M366 227c25-12 48-5 62 9" stroke="#68533e" stroke-width="12" stroke-linecap="round"/>
+<path d="M251 261c22-17 49-13 64 4-24 12-44 10-64-4zm110 3c17-20 43-17 62-1-21 14-43 16-62 1z" fill="#fff9df" stroke="#533f31" stroke-width="4"/>
+<ellipse cx="287" cy="260" rx="9" ry="11" fill="#73989a"/><ellipse cx="391" cy="261" rx="9" ry="11" fill="#73989a"/><circle cx="289" cy="261" r="5" fill="#252d29"/><circle cx="389" cy="262" r="5" fill="#252d29"/><circle cx="292" cy="257" r="2.5" fill="white"/><circle cx="392" cy="258" r="2.5" fill="white"/>
+<path d="M343 256l-13 49c-3 13 15 20 28 10" stroke="#a9694f" stroke-width="5" stroke-linecap="round"/><path d="M270 290l30 3m77 3l26-4" stroke="#c38360" stroke-width="3" stroke-linecap="round"/>
+<path d="M237 308c13 20 14 41 27 42 15-20 39-22 69-15 28-11 60-8 80 10 15-6 20-25 29-39l-4 53c-8 61-48 93-102 89-54-3-88-47-95-94z" fill="#79634b" stroke="#3c382c" stroke-width="4"/>
+<path d="M254 328c4 36 20 78 59 92m114-88c-5 38-16 59-37 77" stroke="#b49a76" stroke-width="5" stroke-linecap="round" stroke-dasharray="2 12"/>
+<path d="M280 360c28 10 68 16 111-4-16 39-75 49-111 4z" fill="#643d31" stroke="#3b332b" stroke-width="4"/><path d="M291 367c24 7 54 8 87-3l-8 12c-30 9-50 7-73 0z" fill="#fff6d9"/>
+<path d="M279 348c22-14 37-10 56-5m7 0c18-11 38-10 53 0" stroke="#554b38" stroke-width="10" stroke-linecap="round"/>
+<path d="M302 417l4 12m14-13l1 17m17-14v15m17-17l-3 15m18-22l-4 17" stroke="#c5b08b" stroke-width="3" stroke-linecap="round"/>
+<path d="M111 574c-33 37-39 91-40 146h92l13-123m353-23c35 30 49 88 49 146h-89l-14-118" fill="url(#skin)" stroke="#292c25" stroke-width="6"/>
+<path d="M529 588c-39 10-45 71-11 100m30-80c-40 5-37 42-16 52m22-38l-24 18 27 20-21 33m-36-62l25 21-13 26 31 23" stroke="#4d544a" stroke-width="12"/>
+<path d="M149 503l50 24-24 104-87-31m388-88l-28 22 27 103 97-33" fill="url(#shirt)" stroke="#292c25" stroke-width="6" stroke-linejoin="round"/>
+<path d="M184 645l-8 75m291-72l10 72" stroke="#a53c32" stroke-width="5"/>
+<g transform="translate(285 584) rotate(-5)"><rect width="105" height="48" rx="5" fill="#272e24"/><text x="52" y="33" fill="#efeee0" text-anchor="middle" font-family="Arial,sans-serif" font-size="28" font-weight="900">BÄRKA</text></g>
+<path d="M88 701h498" stroke="#292c25" stroke-width="2" opacity=".15"/><path d="M100 710V615l68 20 23-78 53 22 45 120z" fill="url(#dots)"/>
+</svg>

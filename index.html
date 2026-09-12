@@ -1,0 +1,188 @@
+<!doctype html>
+<html lang="sv">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#e9eddf" />
+    <meta
+      name="description"
+      content="Möt Bärkan. Snart 40. Aldrig färdigpratad. Ett kärleksfullt, spelbart kaos från Tranås."
+    />
+    <title>BÄRKAN — En lokal legend. Ett globalt tjat.</title>
+    <link rel="icon" type="image/svg+xml" href="barkan.svg" />
+    <link rel="stylesheet" href="style.css" />
+    <link rel="stylesheet" href="game.css" />
+  </head>
+  <body>
+    <header class="header">
+      <a class="brand" href="#" aria-label="Bärkan startsida"
+        >BÄRKAN<span>®</span><small>TRANÅS ORIGINAL</small></a
+      >
+      <nav aria-label="Huvudmeny">
+        <a href="#legend">Legenden</a
+        ><a href="#spelet">Kycklingstuds <span class="nav-dot"></span></a
+        ><a href="#story">Storyn</a>
+      </nav>
+      <button class="sound" id="sound" aria-pressed="false">
+        <span aria-hidden="true">◖))</span>
+        <span id="sound-label">LJUD AV</span>
+      </button>
+    </header>
+    <main>
+      <section class="hero" id="legend">
+        <div class="hero-copy">
+          <div class="eyebrow">
+            <span class="live-dot"></span> DIREKT FRÅN TRANÅS. TYVÄRR.
+          </div>
+          <h1>
+            SNART 40.<br />MENTALT
+            <span class="eight">8<span class="spark">✳</span></span
+            ><br /><span class="outline">ALDRIG TYST.</span>
+          </h1>
+          <p class="intro">
+            Björn Buske Blasek. Men du kan kalla honom <strong>Bärkan.</strong
+            ><br />Stort hjärta. Noll filter. Obegränsat med följdfrågor.
+          </p>
+          <div class="hero-actions">
+            <a class="button primary" href="#spelet"
+              >UTMANA BÄRKAN <span>↗</span></a
+            ><a class="text-link" href="#story"
+              >Hur blev det så här? <span>↓</span></a
+            >
+          </div>
+          <div class="hero-note">
+            <span class="tiny-face">☺</span> Varning: kan börja prata med dig
+            genom skärmen.
+          </div>
+        </div>
+        <div class="portrait-stage">
+          <div class="orbit orbit-one"></div>
+          <div class="orbit orbit-two"></div>
+          <span class="stage-star star-one">✳</span
+          ><span class="stage-star star-two">✦</span>
+          <div class="location">
+            <span>↗</span> 57.99° N, 14.98° E<br /><strong
+              >TRANÅS, SVERIGE</strong
+            >
+          </div>
+          <div class="speech" id="hero-quote" role="status">
+            ”Jag ska bara<br />säga en sak till.”<span>— 45 MINUTER SEDAN</span>
+          </div>
+          <button
+            class="character-button"
+            id="character"
+            aria-label="Tryck på Bärkan för ännu en replik"
+          >
+            <img
+              src="barkan.svg"
+              alt="Tecknad Bärkan med rakat huvud, skägg, röd t-shirt och tatuerad arm"
+              width="660"
+              height="720"
+            />
+          </button>
+          <div class="age-sticker">39-ish<span>ÅR AV ÖVNING</span></div>
+          <div class="character-tag">
+            <span class="live-dot"></span> BÄRKAN
+            <span class="tag-class">LVL. 39 · TJATMAGIKER</span>
+          </div>
+          <span class="portrait-hint">↑ TRYCK PÅ HONOM. PÅ EGEN RISK.</span>
+        </div>
+      </section>
+      <div class="ticker" aria-label="Bärkans egenskaper">
+        <div>
+          LOKAL LEGEND <span>✳</span> 100% BÄRKAN <span>✳</span> 0% TYSTNAD
+          <span>✳</span> TRANÅS SEDAN FÖDELN <span>✳</span> STORT HJÄRTA. LITEN
+          PAUSKNAPP. <span>✳</span> LOKAL LEGEND <span>✳</span>
+        </div>
+      </div>
+      <section class="dossier section-wrap">
+        <div class="section-heading">
+          <p class="eyebrow">01 / PERSONAKTEN</p>
+          <h2>En vuxen man.<br /><span>En tveksam bedömning.</span></h2>
+        </div>
+        <div class="stat-grid">
+          <article class="stat-card">
+            <span class="stat-icon">↗</span>
+            <p>FYSISK ÅLDER</p>
+            <strong>Snart 40<span>år</span></strong
+            ><small>Kroppen har skickat en kalenderinbjudan.</small>
+          </article>
+          <article class="stat-card">
+            <span class="stat-icon">✳</span>
+            <p>MENTAL ÅLDER</p>
+            <strong>Rast<span>nu?</span></strong
+            ><small>Vuxenpoängen ligger i en annan jacka.</small>
+          </article>
+          <article class="stat-card">
+            <span class="stat-icon">♡</span>
+            <p>HJÄRTAT</p>
+            <strong>Guld<span>100%</span></strong
+            ><small>Hjälper dig flytta. Pratar hela vägen.</small>
+          </article>
+        </div>
+      </section>
+      <section id="spelet" class="game-section section-wrap">
+        <div class="game-heading">
+          <div>
+            <p class="eyebrow">
+              <span class="live-dot"></span> 02 / SPELA PÅ EGEN RISK
+            </p>
+            <h2>KALAS UTAN SKYDDSNÄT.</h2>
+            <p>
+              Bärkan fyller nästan 40. Hela hönsgården är bjuden.<br />
+              Studsa gästerna över vattnet. Han sköter snacket.
+            </p>
+          </div>
+          <div class="game-seal">
+            3 LIV<span>100% STUDS.<br />0% BRO.</span>
+          </div>
+        </div>
+        <div id="game-root"></div>
+        <p class="game-disclaimer">
+          En egen Bärkan-tolkning av
+          <a
+            href="https://speldemo.extrude.se/tigerstuds/spel.html"
+            target="_blank"
+            rel="noopener noreferrer"
+            ><u>Tigers Kycklingstuds av Extrude Interactive</u></a
+          >. Ny kod och egen grafik. Blöta kycklingar får badringar.
+        </p>
+      </section>
+      <section id="story" class="story-section section-wrap">
+        <div class="story-intro">
+          <p class="eyebrow">03 / EN INTERAKTIV DOKUMENTÄR*</p>
+          <h2>
+            ALLA VÄGAR<br />LEDER TILL<br /><span>”JO, EN SAK TILL.”</span>
+          </h2>
+          <p>
+            En man. En tisdag i Tranås.<br />En helt orimlig mängd sidospår.<br />Du
+            bestämmer hur illa det blir.
+          </p>
+          <small
+            >* Inte en dokumentär. Vi har inga bevis.<br />Bara väldigt starka
+            vibbar.</small
+          >
+          <div class="story-doodle" aria-hidden="true">
+            …<span>fortsättning följer.<br />alltid.</span>
+          </div>
+        </div>
+        <div id="story-root"></div>
+      </section>
+      <section class="last-word">
+        <p class="eyebrow">EN LOKAL LEGEND. ETT GLOBALT TJAT.</p>
+        <h2>JOBBIG? LITE.<br /><span>VÅR BÄRKAN? ALLTID.</span></h2>
+        <p>
+          En kärleksfull roast av Björn Buske Blasek.<br />Alla äventyr är
+          påhittade. Hjärtat är på rätt ställe.
+        </p>
+        <a href="#spelet" class="button primary">OKEJ, EN OMGÅNG TILL ↗</a>
+      </section>
+    </main>
+    <footer>
+      <a class="brand" href="#">BÄRKAN<span>®</span></a
+      ><span>GJORD MED KÄRLEK. OCH HÖRSELSKYDD.</span
+      ><a href="#">Till toppen ↑</a>
+    </footer>
+    <script type="module" src="app.js"></script>
+  </body>
+</html>

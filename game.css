@@ -1,0 +1,273 @@
+.bounce-game {
+  max-width: 1160px;
+  margin: auto;
+  border: 1px solid #59664e;
+  border-radius: 7px;
+  background: #323a2d;
+  overflow: hidden;
+}
+.bounce-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 25px 28px;
+  gap: 16px;
+}
+.bounce-top .eyebrow {
+  color: #afbe9b;
+  font-size: 8px;
+  margin-bottom: 10px;
+}
+.bounce-top h3 {
+  font: 800 36px/1 var(--display);
+  margin: 0;
+  letter-spacing: 0.3px;
+}
+.pause-game {
+  font-size: 9px;
+  padding: 11px 16px;
+  box-shadow: none;
+  flex-shrink: 0;
+}
+.pause-game:disabled {
+  opacity: 0.4;
+}
+.bounce-hud {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  background: #242d20;
+  border-top: 1px solid #526147;
+  border-bottom: 1px solid #526147;
+  padding: 15px 28px;
+  gap: 20px;
+}
+.bounce-hud > div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-right: 1px solid #526147;
+  padding-right: 22px;
+  gap: 10px;
+}
+.bounce-hud > div:last-child {
+  border: none;
+  padding-right: 0;
+}
+.bounce-hud span {
+  font-size: 8px;
+  letter-spacing: 1.3px;
+  color: #b8c7a5;
+}
+.bounce-hud strong {
+  font: 700 29px var(--display);
+  color: var(--green);
+  white-space: nowrap;
+}
+.bounce-viewport {
+  position: relative;
+  background: #dce9db;
+}
+.bounce-viewport canvas {
+  display: block;
+  width: 100%;
+  height: auto;
+  touch-action: none;
+  cursor: ew-resize;
+  outline-offset: -4px;
+}
+.bounce-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #1f2a2147;
+  padding: 18px;
+}
+.bounce-overlay[hidden] {
+  display: none;
+}
+.bounce-panel {
+  width: 450px;
+  max-width: 100%;
+  text-align: center;
+  background: #eeeee4;
+  border: 2px solid #293725;
+  box-shadow: 6px 6px 0 #293725;
+  color: var(--ink);
+  padding: 28px 35px;
+  transform: rotate(-1deg);
+}
+.bounce-panel .eyebrow {
+  font-size: 8px;
+  letter-spacing: 1.2px;
+  margin: 0 0 15px;
+}
+.bounce-panel h4 {
+  font: 800 46px/0.98 var(--display);
+  margin: 0 0 15px;
+}
+.bounce-panel > p:not(.eyebrow) {
+  font-size: 12px;
+  line-height: 1.8;
+  margin: 0 0 20px;
+}
+.bounce-panel .button {
+  font-size: 10px;
+}
+.bounce-comment {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  background: var(--green);
+  color: var(--ink);
+  padding: 16px 28px;
+  min-height: 58px;
+  border-top: 2px solid var(--ink);
+}
+.bounce-comment > span {
+  font-size: 8px;
+  font-weight: 800;
+  letter-spacing: 1px;
+  white-space: nowrap;
+  border-right: 1px solid #82984d;
+  padding-right: 20px;
+}
+.bounce-comment p {
+  font-size: 12px;
+  font-weight: 600;
+  margin: 0;
+  line-height: 1.6;
+}
+.bounce-bottom {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 20px 28px;
+  gap: 20px;
+}
+.bounce-bottom p {
+  font-size: 10px;
+  color: #b8c7a5;
+  line-height: 1.9;
+  margin: 0;
+}
+.bounce-bottom strong {
+  color: #eeeee4;
+  letter-spacing: 0.7px;
+  font-size: 9px;
+  margin-right: 12px;
+}
+.bounce-arrows {
+  display: flex;
+  gap: 10px;
+}
+.bounce-arrows button {
+  background: #e8eddf;
+  border: 1px solid #121a0f;
+  border-radius: 3px;
+  width: 58px;
+  height: 42px;
+  font-size: 25px;
+  color: #293725;
+  box-shadow: 3px 3px 0 #121a0f;
+  touch-action: none;
+  user-select: none;
+}
+.bounce-arrows button:active {
+  background: var(--green);
+  transform: translate(2px, 2px);
+  box-shadow: 1px 1px 0 #121a0f;
+}
+@media (max-width: 700px) {
+  .bounce-top {
+    padding: 18px 15px;
+  }
+  .bounce-top h3 {
+    font-size: 25px;
+  }
+  .bounce-top .eyebrow {
+    font-size: 6px;
+    letter-spacing: 0.8px;
+  }
+  .pause-game {
+    padding: 9px 10px;
+    font-size: 8px;
+  }
+  .bounce-hud {
+    padding: 11px 15px;
+    gap: 12px;
+  }
+  .bounce-hud > div {
+    display: block;
+    padding-right: 8px;
+  }
+  .bounce-hud span {
+    display: block;
+    font-size: 6px;
+    letter-spacing: 0.7px;
+    white-space: nowrap;
+  }
+  .bounce-hud strong {
+    font-size: 24px;
+  }
+  .bounce-overlay {
+    position: relative;
+    padding: 20px 15px;
+    background: #c4d2b6;
+  }
+  .bounce-panel {
+    padding: 21px 20px;
+    box-shadow: 4px 4px 0 #293725;
+  }
+  .bounce-panel h4 {
+    font-size: 34px;
+  }
+  .bounce-panel > p:not(.eyebrow) {
+    font-size: 11px;
+    line-height: 1.7;
+  }
+  .bounce-panel .eyebrow {
+    font-size: 7px;
+    line-height: 1.6;
+  }
+  .bounce-panel .button {
+    padding: 13px 16px;
+    font-size: 9px;
+  }
+  .bounce-comment {
+    display: block;
+    padding: 13px 15px;
+  }
+  .bounce-comment > span {
+    display: block;
+    border: 0;
+    margin-bottom: 5px;
+    font-size: 7px;
+  }
+  .bounce-comment p {
+    font-size: 10px;
+  }
+  .bounce-bottom {
+    padding: 15px;
+    display: block;
+  }
+  .bounce-bottom p {
+    font-size: 9px;
+  }
+  .bounce-bottom strong {
+    display: block;
+    font-size: 8px;
+  }
+  .bounce-arrows {
+    justify-content: space-between;
+    margin-top: 14px;
+  }
+  .bounce-arrows button {
+    width: 44%;
+    height: 45px;
+  }
+  .bounce-viewport canvas {
+    min-height: 205px;
+  }
+}
