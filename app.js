@@ -20,33 +20,125 @@ const soundButton = document.querySelector("#sound");
 let quoteIndex = 0;
 let soundEnabled = false;
 let audio;
-function blip(frequency = 330) {
-  if (!soundEnabled) return;
+let masterGain;
+let splashBuffer;
+function enableAudio() {
   const AudioContext = window.AudioContext || window.webkitAudioContext;
   if (!AudioContext) return;
   audio ||= new AudioContext();
+  if (!masterGain) {
+    masterGain = audio.createGain();
+    masterGain.gain.value = 0.55;
+    masterGain.connect(audio.destination);
+  }
   if (audio.state === "suspended") audio.resume().catch(() => {});
+}
+function tone(frequency, endFrequency, duration, delay = 0, volume = 0.05, type = "triangle", peak) {
+  if (!soundEnabled || !audio || audio.state !== "running") return;
+  const start = audio.currentTime + delay;
   const oscillator = audio.createOscillator();
   const gain = audio.createGain();
-  oscillator.type = "triangle";
-  oscillator.frequency.setValueAtTime(frequency, audio.currentTime);
-  oscillator.frequency.exponentialRampToValueAtTime(
-    frequency * 0.55,
-    audio.currentTime + 0.15,
-  );
-  gain.gain.setValueAtTime(0.055, audio.currentTime);
-  gain.gain.exponentialRampToValueAtTime(0.001, audio.currentTime + 0.18);
-  oscillator.connect(gain).connect(audio.destination);
-  oscillator.start();
-  oscillator.stop(audio.currentTime + 0.18);
+  oscillator.type = type;
+  oscillator.frequency.setValueAtTime(frequency, start);
+  if (peak) {
+    oscillator.frequency.exponentialRampToValueAtTime(peak, start + duration * 0.18);
+  }
+  oscillator.frequency.exponentialRampToValueAtTime(endFrequency, start + duration);
+  gain.gain.setValueAtTime(0, start);
+  gain.gain.linearRampToValueAtTime(volume, start + 0.008);
+  gain.gain.exponentialRampToValueAtTime(0.001, start + duration);
+  gain.gain.linearRampToValueAtTime(0, start + duration + 0.015);
+  oscillator.connect(gain).connect(masterGain);
+  oscillator.start(start);
+  oscillator.stop(start + duration + 0.02);
+  oscillator.onended = () => {
+    oscillator.disconnect();
+    gain.disconnect();
+  };
 }
+function blip(frequency = 330) {
+  tone(frequency, frequency * 0.65, 0.12, 0, 0.035);
+}
+function splash() {
+  if (!soundEnabled || !audio || audio.state !== "running") return;
+  if (!splashBuffer) {
+    splashBuffer = audio.createBuffer(1, Math.ceil(audio.sampleRate * 0.3), audio.sampleRate);
+    const samples = splashBuffer.getChannelData(0);
+    for (let index = 0; index < samples.length; index++) {
+      samples[index] = Math.random() * 2 - 1;
+    }
+  }
+  const start = audio.currentTime;
+  const noise = audio.createBufferSource();
+  const filter = audio.createBiquadFilter();
+  const gain = audio.createGain();
+  noise.buffer = splashBuffer;
+  filter.type = "lowpass";
+  filter.frequency.setValueAtTime(1800, start);
+  filter.frequency.exponentialRampToValueAtTime(180, start + 0.28);
+  gain.gain.setValueAtTime(0, start);
+  gain.gain.linearRampToValueAtTime(0.11, start + 0.012);
+  gain.gain.exponentialRampToValueAtTime(0.001, start + 0.28);
+  noise.connect(filter).connect(gain).connect(masterGain);
+  noise.start(start);
+  noise.stop(start + 0.3);
+  noise.onended = () => {
+    noise.disconnect();
+    filter.disconnect();
+    gain.disconnect();
+  };
+  tone(150, 55, 0.24, 0, 0.055, "sine");
+}
+function gameSound(kind) {
+  switch (kind) {
+    case "bounce":
+      tone(240, 190, 0.22, 0, 0.07, "triangle", 620);
+      break;
+    case "saved":
+      tone(660, 990, 0.1, 0, 0.045, "sine");
+      tone(990, 1320, 0.16, 0.09, 0.045, "sine");
+      break;
+    case "splash":
+      splash();
+      break;
+    case "milestone":
+      tone(523, 523, 0.14, 0, 0.05);
+      tone(659, 659, 0.14, 0.12, 0.05);
+      tone(784, 784, 0.16, 0.24, 0.05);
+      tone(1047, 1047, 0.3, 0.38, 0.05);
+      break;
+    case "start":
+      tone(330, 440, 0.12, 0, 0.05);
+      tone(660, 880, 0.2, 0.13, 0.05);
+      break;
+    case "over":
+      tone(392, 330, 0.18, 0, 0.05);
+      tone(294, 247, 0.18, 0.18, 0.05);
+      tone(196, 98, 0.38, 0.36, 0.045);
+      break;
+  }
+}
+function resumeAudio() {
+  if (soundEnabled && audio?.state === "suspended") {
+    audio.resume().catch(() => {});
+  }
+}
+document.addEventListener("pointerdown", resumeAudio, { passive: true });
+document.addEventListener("keydown", resumeAudio);
 soundButton.addEventListener("click", () => {
   soundEnabled = !soundEnabled;
+  if (soundEnabled) enableAudio();
+  if (masterGain) {
+    masterGain.gain.cancelScheduledValues(audio.currentTime);
+    masterGain.gain.setTargetAtTime(soundEnabled ? 0.55 : 0, audio.currentTime, 0.01);
+  }
   soundButton.setAttribute("aria-pressed", String(soundEnabled));
   document.querySelector("#sound-label").textContent = soundEnabled
     ? "LJUD PÅ"
     : "LJUD AV";
-  blip(440);
+  if (soundEnabled && audio) {
+    audio.resume().then(() => blip(440)).catch(() => {});
+  }
 });
 character.addEventListener("click", () => {
   quoteIndex = (quoteIndex + 1) % quotes.length;
@@ -57,12 +149,12 @@ character.addEventListener("click", () => {
   blip(260 + quoteIndex * 40);
 });
 document.querySelector("#game-root").addEventListener("click", (event) => {
-  if (event.target.closest("button:not(:disabled)")) blip(390);
+  if (event.target.closest(".pause-game:not(:disabled), .expand-game:not(:disabled)")) {
+    blip(390);
+  }
 });
 document
   .querySelector("#game-root")
   .addEventListener("barkan-game-sound", (event) => {
-    blip(
-      event.detail === "saved" ? 660 : event.detail === "splash" ? 140 : 390,
-    );
+    gameSound(event.detail);
   });

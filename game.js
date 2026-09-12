@@ -1,76 +1,123 @@
-const W = 1000,
-  H = 560,
-  STEP = 1 / 120;
-const SHELL_Y = 433,
-  SHELL_HALF = 64,
-  GRAVITY = 600;
+import { createRenderer } from "./game-renderer.js";
+
+const W = 1000;
+const H = 625;
+const STEP = 1 / 120;
+const SHELL_Y = 495;
+const SHELL_HALF = 85;
+const FEET = 17;
+const GRAVITY = 620;
 const RECORD_KEY = "barkan-kycklingstuds-record";
+const CADENCE = [1, 0.85, 1.2, 0.65, 1.45, 0.8];
+const SAVED_LINES = [
+  "En till! Jag börjar välkomsttalet från början.",
+  "Du kom för tårtan. Nu blir det bildspel från parkeringen.",
+  "Stort hjärta. Små fåglar. Orimlig logistik.",
+  "Alla ska med. Ingen kommer undan efterrätten.",
+];
+const MISS_LINES = [
+  "Det där var vattenvägen. Enligt min plan.",
+  "Två badar. Det räknas som poolparty, va?",
+  "Vi behöver prata om bron. Har ni tre timmar?",
+];
+const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
 
 export function initGame() {
   const root = document.querySelector("#game-root");
   if (!root) return () => {};
   root.innerHTML = `
     <section class="bounce-game" aria-labelledby="bounce-title">
-      <div class="bounce-top"><div><p class="eyebrow">KLASSISK STUDS. LOKALT KAOS.</p><h3 id="bounce-title">BÄRKANS KYCKLINGSTUDS</h3></div><button class="button pause-game" disabled>Pausa</button></div>
-      <div class="bounce-hud" aria-label="Spelstatistik"><div><span>PÅ KALASET</span><strong data-score>0</strong></div><div><span>KVAR ATT TAPPA</span><strong data-lives>3 / 3</strong></div><div><span>PERSONBÄSTA</span><strong data-best>0</strong></div></div>
-      <div class="bounce-viewport">
-        <canvas width="1000" height="560" tabindex="0" aria-label="Kycklingstuds. Flytta sköldpaddan med mus, finger eller vänster och höger pil. Studsa kycklingarna till högra stranden. Tre i vattnet avslutar spelet." aria-describedby="bounce-instructions"></canvas>
-        <div class="bounce-overlay"><div class="bounce-panel"><p class="eyebrow" data-overlay-kicker>INBJUDAN: NÄSTAN 40-ÅRSKALAS</p><h4 data-overlay-title>ALLA SKA MED.<br>INGEN KAN SIMMA.</h4><p data-overlay-copy>Bärkan har bjudit hela hönsgården. Bron? Den skulle han ”bara fixa”. Styr sköldpaddan och studsa gästerna till kalaset. Tre i vattnet = slut på festen.</p><button class="button primary" data-play>SLÄPP KYCKLINGARNA ↗</button></div></div>
+      <div class="bounce-top">
+        <div class="bounce-brand"><p class="eyebrow">TRANÅS ARCADE CLUB / SEDAN NYSS</p><h3 id="bounce-title">BÄRKANS KYCKLINGSTUDS</h3></div>
+        <div class="bounce-actions">
+          <button type="button" class="button sound-game" data-game-sound aria-pressed="false" aria-label="Slå på spelljud">Ljud av</button>
+          <button type="button" class="button pause-game" disabled>Pausa</button>
+          <button type="button" class="button expand-game" aria-pressed="false" aria-label="Förstora spelet">Förstora ↗</button>
+        </div>
       </div>
-      <div class="bounce-comment" role="status"><span>BÄRKAN SÄGER</span><p data-comment>”Det är lugnt. Jag har sett en bro på YouTube.”</p></div>
-      <div class="bounce-bottom"><p id="bounce-instructions"><strong>FLYTTA, FÅNGA, STUDSA.</strong> Mus / dra med fingret / ← →<br>Fånga under kycklingarna. Varje gäst på högra stranden ger 1 poäng. P = paus.</p><div class="bounce-arrows" aria-label="Flytta sköldpaddan"><button type="button" data-direction="-1" aria-label="Flytta vänster">←</button><button type="button" data-direction="1" aria-label="Flytta höger">→</button></div></div>
+      <div class="bounce-hud" aria-label="Spelstatistik">
+        <div><span>PÅ KALASET</span><strong data-score>0</strong></div>
+        <div><span>LIV KVAR</span><strong data-lives aria-label="3 av 3 liv"><i></i><i></i><i></i></strong></div>
+        <div><span>PERSONBÄSTA</span><strong data-best>0</strong></div>
+        <div><span>TEMPO</span><strong data-tempo>1.00×</strong></div>
+      </div>
+      <div class="bounce-viewport">
+        <canvas width="1000" height="625" tabindex="0" aria-label="Styr sköldpaddan och studsa kycklingarna över vattnet. Tre missar avslutar rundan." aria-describedby="bounce-instructions"></canvas>
+        <div class="bounce-overlay"><div class="bounce-panel">
+          <p class="eyebrow" data-overlay-kicker>ETT KALAS. INGEN BRO. DIN TUR.</p>
+          <h4 data-overlay-title>ALLA SKA MED.<br>INGEN KAN SIMMA.</h4>
+          <p data-overlay-copy>Följ kycklingarna med sköldpaddan. Studsa dem hela vägen till Bärkans kalas — och hinna tillbaka för nästa. En på land = en poäng. Tre plask = slut.</p>
+          <div class="bounce-result" hidden><div><span>RÄDDADE</span><strong data-result-score>0</strong></div><div><span>STUDSAR</span><strong data-result-bounces>0</strong></div><div><span>TID</span><strong data-result-time>0:00</strong></div></div>
+          <button type="button" class="button primary" data-play>SLÄPP KYCKLINGARNA ↗</button>
+        </div></div>
+      </div>
+      <div class="bounce-comment" role="status" aria-live="polite"><span>BÄRKAN SÄGER</span><p data-comment>”Det är lugnt. Jag har sett en bro på YouTube.”</p></div>
+      <div class="bounce-bottom"><p id="bounce-instructions"><strong>FLYTTA. FÅNGA. TILLBAKA IGEN.</strong><br>Mus / dra med fingret / ← → eller A D · P / mellanslag = paus<br>Musen utanför spelplanen pausar automatiskt.</p><div class="bounce-arrows" aria-label="Flytta sköldpaddan"><button type="button" data-direction="-1" aria-label="Flytta vänster">←</button><button type="button" data-direction="1" aria-label="Flytta höger">→</button></div></div>
     </section>`;
-  const canvas = root.querySelector("canvas"),
-    ctx = canvas.getContext("2d");
-  if (!ctx) {
-    root.querySelector("[data-overlay-copy]").textContent =
-      "Din webbläsare saknar Canvas 2D. Öppna sidan i en aktuell version av Chrome, Firefox eller Safari.";
+  const canvas = root.querySelector("canvas");
+  if (!canvas.getContext("2d")) {
+    root.querySelector("[data-overlay-copy]").textContent = "Spelet behöver Canvas 2D. Prova en aktuell version av Chrome, Firefox eller Safari.";
     root.querySelector("[data-play]").disabled = true;
     return () => {};
   }
-  const overlay = root.querySelector(".bounce-overlay"),
-    play = root.querySelector("[data-play]");
-  const pause = root.querySelector(".pause-game"),
-    scoreNode = root.querySelector("[data-score]");
-  const livesNode = root.querySelector("[data-lives]"),
-    bestNode = root.querySelector("[data-best]");
+  const renderer = createRenderer(canvas);
+  const game = root.querySelector(".bounce-game");
+  const viewport = root.querySelector(".bounce-viewport");
+  const overlay = root.querySelector(".bounce-overlay");
+  const play = root.querySelector("[data-play]");
+  const pause = root.querySelector(".pause-game");
+  const expand = root.querySelector(".expand-game");
+  const scoreNode = root.querySelector("[data-score]");
+  const livesNode = root.querySelector("[data-lives]");
+  const lifePips = [...livesNode.children];
+  const bestNode = root.querySelector("[data-best]");
+  const tempoNode = root.querySelector("[data-tempo]");
   const comment = root.querySelector("[data-comment]");
+  const result = root.querySelector(".bounce-result");
+  const sound = root.querySelector("[data-game-sound]");
+  const masterSound = document.querySelector("#sound");
+  const motion = matchMedia("(prefers-reduced-motion: reduce)");
+  const scene = {
+    mode: "ready", time: 0, score: 0, misses: 0,
+    turtle: { x: 307, impact: 0, facing: 1 },
+    chickens: [], effects: [], lost: [], shake: 0,
+    reducedMotion: motion.matches,
+  };
   let best = 0;
   try {
     const saved = Number(localStorage.getItem(RECORD_KEY));
     if (Number.isFinite(saved) && saved > 0) best = Math.floor(saved);
   } catch {}
-  bestNode.textContent = best;
-  let state = "ready",
-    score = 0,
-    misses = 0,
-    elapsed = 0,
-    spawnIn = 0.7;
-  let paddle = 260,
-    target = 260,
-    left = false,
-    right = false;
-  let frame = 0,
-    last = 0,
-    accumulator = 0;
-  const chickens = [],
-    effects = [];
-  const portrait = new Image();
-  portrait.src = "./barkan.svg";
-  portrait.onload = () => {
-    if (state !== "running") draw();
-  };
-  const clamp = (v, min, max) => Math.max(min, Math.min(max, v));
-  function say(text) {
-    comment.textContent = `”${text}”`;
+  let frame = 0;
+  let last = 0;
+  let accumulator = 0;
+  let spawnIn = 0.25;
+  let wave = 0;
+  let bounces = 0;
+  let pace = 1;
+  let endAge = 0;
+  let pointerPause = false;
+  let inputMode = "keyboard";
+  let expanded = false;
+  let previousOverflow = "";
+  const heldKeys = new Set();
+  const heldPointers = new Map();
+  const cleanup = [];
+  function listen(target, type, handler, options) {
+    target.addEventListener(type, handler, options);
+    cleanup.push(() => target.removeEventListener(type, handler, options));
   }
+  function say(text) { comment.textContent = `”${text}”`; }
   function signal(kind) {
     root.dispatchEvent(new CustomEvent("barkan-game-sound", { detail: kind }));
   }
   function stats() {
-    scoreNode.textContent = score;
-    livesNode.textContent = `${3 - misses} / 3`;
-    root.dataset.state = state;
+    scoreNode.textContent = scene.score;
+    bestNode.textContent = best;
+    livesNode.setAttribute("aria-label", `${3 - scene.misses} av 3 liv`);
+    lifePips.forEach((pip, i) => pip.classList.toggle("lost", i >= 3 - scene.misses));
+    tempoNode.textContent = `${pace.toFixed(2)}×`;
+    root.dataset.state = scene.mode;
   }
   function showPanel(kicker, title, copy, action) {
     root.querySelector("[data-overlay-kicker]").textContent = kicker;
@@ -79,453 +126,312 @@ export function initGame() {
     play.textContent = action;
     overlay.hidden = false;
   }
-  function start() {
-    if (state === "paused") {
-      resume();
-      return;
-    }
-    cancelAnimationFrame(frame);
-    score = 0;
-    misses = 0;
-    elapsed = 0;
-    spawnIn = 0.7;
-    chickens.length = 0;
-    effects.length = 0;
-    paddle = target = 260;
-    left = right = false;
-    say("Välkomna! Mitt välkomsttal har bara 46 kapitel.");
-    run();
+  function release() {
+    heldKeys.clear();
+    heldPointers.clear();
   }
   function run() {
-    state = "running";
+    cancelAnimationFrame(frame);
+    scene.mode = "running";
+    pointerPause = false;
     overlay.hidden = true;
+    result.hidden = true;
     pause.disabled = false;
     pause.textContent = "Pausa";
-    stats();
     accumulator = 0;
     last = performance.now();
+    stats();
     canvas.focus({ preventScroll: true });
-    canvas.scrollIntoView({ block: "center", behavior: "instant" });
     frame = requestAnimationFrame(tick);
   }
-  function suspend() {
-    if (state !== "running") return;
-    cancelAnimationFrame(frame);
-    state = "paused";
-    left = right = false;
-    pause.textContent = "Fortsätt";
-    showPanel(
-      "FIKAPAUS",
-      "KYCKLINGARNA VÄNTAR.",
-      "Spelet står still. Bärkan använder pausen till att förklara varför pauser är viktiga. Länge.",
-      "FORTSÄTT KALASET ↗",
-    );
-    stats();
-    draw();
+  function start() {
+    if (scene.mode === "paused") { run(); return; }
+    scene.time = scene.score = scene.misses = 0;
+    scene.chickens.length = scene.effects.length = scene.lost.length = 0;
+    scene.turtle.x = 307;
+    scene.turtle.impact = scene.shake = 0;
+    scene.turtle.facing = 1;
+    spawnIn = 0.25;
+    wave = bounces = endAge = 0;
+    pace = 1;
+    inputMode = "keyboard";
+    release();
+    say("Välkomna! Bron är inställd. Sköldpaddan är bokad.");
+    canvas.scrollIntoView({ block: "center", behavior: "instant" });
+    signal("start");
+    run();
   }
-  function resume() {
-    if (state === "paused") run();
+  function suspend(fromPointer = false) {
+    if (scene.mode !== "running") return;
+    cancelAnimationFrame(frame);
+    scene.mode = "paused";
+    pointerPause = fromPointer;
+    release();
+    pause.textContent = "Fortsätt";
+    showPanel("FIKAPAUS", "INGEN STRESS. ÄN.", fromPointer
+      ? "För musen över spelplanen igen för att fortsätta. Kycklingarna väntar precis där du lämnade dem."
+      : "Spelet står still. Bärkan passar på att förklara varför pauser är viktiga. Länge.", "FORTSÄTT KALASET ↗");
+    stats();
+    renderer.draw(scene);
+  }
+  function togglePause() {
+    if (scene.mode === "running") suspend();
+    else if (scene.mode === "paused") run();
   }
   function end() {
-    state = "over";
-    cancelAnimationFrame(frame);
+    scene.mode = "over";
+    endAge = 0;
+    pointerPause = false;
     pause.disabled = true;
-    left = right = false;
-    const record = score > best;
+    release();
+    const record = scene.score > best;
     if (record) {
-      best = score;
-      bestNode.textContent = best;
-      try {
-        localStorage.setItem(RECORD_KEY, String(best));
-      } catch {}
+      best = scene.score;
+      try { localStorage.setItem(RECORD_KEY, String(best)); } catch {}
     }
-    showPanel(
-      record
-        ? "NYTT PERSONBÄSTA. RING TRANÅS TIDNING."
-        : "TRE PLASK. ETT MYCKET LÅNGT EFTERSNACK.",
-      `${score} GÄSTER PÅ KALASET.`,
-      score
-        ? "Kycklingarna i vattnet fick badringar. Gästerna på land fick Bärkans livshistoria. Oklart vilka som hade mest tur."
-        : "Ingen kom fram. Bärkan håller tal för en servett. Den har bett om notan.",
-      "EN FEST TILL ↗",
-    );
-    say("Jag tar det kort. Först: en genomgång av varje kyckling.");
+    showPanel(record ? "NYTT REKORD. RING TRANÅS TIDNING." : "TRE PLASK. ETT LÅNGT EFTERSNACK.",
+      `${scene.score} GÄSTER PÅ KALASET.`,
+      scene.score ? "Kycklingarna i vattnet fick badringar. De på land fick Bärkans livshistoria. Oklart vilka som hade mest tur." : "Ingen kom fram. Bärkan håller tal för en servett. Den har bett om notan.",
+      "EN RUNDA TILL ↗");
+    result.hidden = false;
+    root.querySelector("[data-result-score]").textContent = scene.score;
+    root.querySelector("[data-result-bounces]").textContent = bounces;
+    root.querySelector("[data-result-time]").textContent = `${Math.floor(scene.time / 60)}:${String(Math.floor(scene.time % 60)).padStart(2, "0")}`;
+    say(MISS_LINES[2]);
+    signal("over");
     stats();
     play.focus({ preventScroll: true });
   }
-  function spawn() {
-    chickens.push({ x: 120, y: 226, vx: 128, vy: -65, bounces: 0 });
+  function effect(kind, x, y, text = "") {
+    scene.effects.push({ kind, x, y, age: 0, seed: wave + bounces + scene.score, text });
   }
-  function effect(x, y, text, color) {
-    effects.push({ x, y, text, color, life: 1 });
+  function moveTurtle(x) {
+    const next = clamp(x, 255, 785);
+    if (Math.abs(next - scene.turtle.x) > 0.2) scene.turtle.facing = next > scene.turtle.x ? 1 : -1;
+    scene.turtle.x = next;
   }
   function update(dt) {
-    elapsed += dt;
-    spawnIn -= dt;
-    if (left || right)
-      target = paddle + ((right ? 1 : 0) - (left ? 1 : 0)) * 630 * dt;
-    target = clamp(target, 165, 823);
-    paddle += clamp(target - paddle, -1000 * dt, 1000 * dt);
-    if (spawnIn <= 0) {
-      spawn();
-      spawnIn += Math.max(1.15, 2.9 - elapsed * 0.016);
+    scene.time += dt;
+    let movingRight = heldKeys.has("ArrowRight") || heldKeys.has("KeyD");
+    let movingLeft = heldKeys.has("ArrowLeft") || heldKeys.has("KeyA");
+    for (const direction of heldPointers.values()) {
+      if (direction === 1) movingRight = true;
+      else movingLeft = true;
     }
-    for (let i = chickens.length - 1; i >= 0; i--) {
-      const c = chickens[i],
-        oldFeet = c.y + 14;
-      c.vy += GRAVITY * dt;
-      c.x += c.vx * dt;
-      c.y += c.vy * dt;
-      // Swept feet crossing prevents fast falls from tunnelling through the shell or bank.
-      if (c.vy > 0 && oldFeet <= 290 && c.y + 14 >= 290 && c.x >= 864) {
-        score++;
-        chickens.splice(i, 1);
-        stats();
-        effect(896, 250, "+1 GÄST", "#375627");
-        signal("saved");
-        const lines = [
-          "En till! Jag börjar välkomsttalet från början.",
-          "Du kom för tårtan. Du stannar för att jag blockerar dörren.",
-          "Ingen går innan jag berättat om parkeringen.",
-          "Stort hjärta. Små fåglar. Orimlig logistik.",
-        ];
-        say(lines[(score - 1) % lines.length]);
+    const direction = Number(movingRight) - Number(movingLeft);
+    if (direction) moveTurtle(scene.turtle.x + direction * 950 * dt);
+    spawnIn -= dt;
+    if (spawnIn <= 0) {
+      scene.chickens.push({ x: -22, y: 183, vy: 0, rotation: 0, phase: "queued", age: 0 });
+      spawnIn += Math.max(1.2, 2.15 - scene.score * 0.009) * CADENCE[wave++ % CADENCE.length] / pace;
+    }
+    // Speed changes scale time, not trajectories: every bird remains catchable.
+    const flightDt = dt * pace;
+    for (let i = scene.chickens.length - 1; i >= 0; i--) {
+      const c = scene.chickens[i];
+      c.age += dt;
+      if (c.phase === "queued") {
+        c.x += 100 * flightDt;
+        if (c.x >= 150) { c.x = 150; c.vy = -180; c.phase = "flying"; c.age = 0; }
         continue;
       }
-      if (
-        c.vy > 0 &&
-        oldFeet <= SHELL_Y &&
-        c.y + 14 >= SHELL_Y &&
-        Math.abs(c.x - paddle) <= SHELL_HALF + 8
-      ) {
-        c.y = SHELL_Y - 14;
-        c.vy = -540;
-        c.bounces++;
-        effect(
-          c.x,
-          SHELL_Y - 30,
-          ["BOING!", "BÄRK!", "STUDS!"][c.bounces % 3],
-          "#293725",
-        );
-        signal("bounce");
+      if (c.phase === "landed") {
+        c.x += 95 * flightDt;
+        if (c.x > W + 30) scene.chickens.splice(i, 1);
+        continue;
       }
-      if (c.y > 494 || c.x > 1040) {
-        effects.push({
-          x: c.x,
-          y: 490,
-          text: "PLASK!",
-          color: "#fffbed",
-          life: 1,
-        });
-        chickens.splice(i, 1);
-        misses++;
+      const oldFeet = c.y + FEET;
+      const oldX = c.x;
+      c.x += 120 * flightDt;
+      c.y += c.vy * flightDt + GRAVITY * flightDt * flightDt / 2;
+      c.vy += GRAVITY * flightDt;
+      c.rotation += flightDt * 2.7;
+      // Like the reference, crossing onto the lower right bank ends the trip.
+      if (c.x >= 870 && c.y + FEET <= 355) {
+        c.phase = "landed";
+        c.y = 338;
+        c.rotation = 0;
+        c.age = 0;
+        scene.score++;
+        pace = Math.min(1.5, 1 + scene.score * 0.004);
+        effect("save", 900, 315, "+1");
+        if (scene.score % 10 === 0) {
+          effect("milestone", 500, 120, `${scene.score} PÅ KALASET!`);
+          say(`${scene.score} gäster! Nu börjar mitt alldeles korta tal.`);
+          signal("milestone");
+        } else {
+          if (scene.score === 1 || scene.score % 4 === 0) say(SAVED_LINES[Math.floor(scene.score / 4) % SAVED_LINES.length]);
+          signal("saved");
+        }
         stats();
-        signal("splash");
-        say(
-          [
-            "Det där var vattenvägen. Enligt min plan.",
-            "Två badar. Det räknas som poolparty, va?",
-            "Vi behöver prata om bron. Har ni tre timmar?",
-          ][misses - 1],
-        );
-        if (misses === 3) {
-          end();
-          break;
+        continue;
+      }
+      if (c.vy > 0 && oldFeet <= SHELL_Y && c.y + FEET >= SHELL_Y) {
+        const crossing = (SHELL_Y - oldFeet) / (c.y + FEET - oldFeet);
+        const hitX = oldX + (c.x - oldX) * crossing;
+        if (Math.abs(hitX - scene.turtle.x) <= SHELL_HALF + 7) {
+          c.y = SHELL_Y - FEET;
+          c.vy = -690;
+          bounces++;
+          scene.turtle.impact = 1;
+          effect("bounce", hitX, SHELL_Y);
+          signal("bounce");
         }
       }
+      if (c.y > H - 35 || c.x > W + 30) {
+        scene.lost.push({ x: clamp(c.x, 205, 840) });
+        effect("splash", c.x, 505, "PLASK!");
+        scene.chickens.splice(i, 1);
+        scene.misses++;
+        scene.shake = 1;
+        signal("splash");
+        say(MISS_LINES[scene.misses - 1]);
+        stats();
+        if (scene.misses === 3) { end(); break; }
+      }
     }
-    for (let i = effects.length - 1; i >= 0; i--) {
-      effects[i].life -= dt;
-      effects[i].y -= 25 * dt;
-      if (effects[i].life <= 0) effects.splice(i, 1);
+  }
+  function animateEffects(dt) {
+    scene.turtle.impact = Math.max(0, scene.turtle.impact - dt * 4);
+    scene.shake = Math.max(0, scene.shake - dt * 3);
+    for (let i = scene.effects.length - 1; i >= 0; i--) {
+      const e = scene.effects[i];
+      e.age += dt;
+      if (e.age > (e.kind === "milestone" ? 2 : 1.2)) scene.effects.splice(i, 1);
     }
   }
   function tick(now) {
-    if (state !== "running") return;
-    const delta = (now - last) / 1000;
+    if (scene.mode !== "running" && scene.mode !== "over") return;
+    const delta = Math.max(0, (now - last) / 1000);
     last = now;
-    // A suspended/throttled tab must not fast-forward into three unavoidable losses.
-    if (delta > 0.5) {
-      suspend();
-      return;
-    }
-    accumulator += Math.max(0, delta);
-    while (accumulator >= STEP && state === "running") {
-      update(STEP);
+    if (delta > 0.5 && scene.mode === "running") { suspend(); return; }
+    accumulator += Math.min(delta, 0.1);
+    while (accumulator >= STEP) {
+      if (scene.mode === "running") update(STEP);
+      else endAge += STEP;
+      animateEffects(STEP);
       accumulator -= STEP;
     }
-    draw();
-    if (state === "running") frame = requestAnimationFrame(tick);
-  }
-  function ellipse(x, y, rx, ry, fill, stroke = "#293725") {
-    ctx.beginPath();
-    ctx.ellipse(x, y, rx, ry, 0, 0, Math.PI * 2);
-    ctx.fillStyle = fill;
-    ctx.fill();
-    if (stroke) {
-      ctx.strokeStyle = stroke;
-      ctx.lineWidth = 2.5;
-      ctx.stroke();
-    }
-  }
-  function rect(x, y, w, h, fill) {
-    ctx.fillStyle = fill;
-    ctx.fillRect(x, y, w, h);
-  }
-  function text(value, x, y, size = 16, color = "#293725", align = "left") {
-    ctx.font = `800 ${size}px "DM Sans", sans-serif`;
-    ctx.fillStyle = color;
-    ctx.textAlign = align;
-    ctx.fillText(value, x, y);
-  }
-  function chicken(c) {
-    ctx.save();
-    ctx.translate(c.x, c.y);
-    ctx.rotate(Math.sin(c.vy / 450) * 0.17);
-    ellipse(0, 0, 17, 15, "#ffe37d");
-    ellipse(-5, 3, 9, 6, "#edba53");
-    ellipse(8, -11, 11, 11, "#fff091");
-    ctx.beginPath();
-    ctx.moveTo(17, -13);
-    ctx.lineTo(27, -9);
-    ctx.lineTo(17, -5);
-    ctx.fillStyle = "#ef7056";
-    ctx.fill();
-    ctx.stroke();
-    ellipse(12, -14, 2, 3, "#293725", null);
-    ellipse(5, -23, 4, 4, "#ef7056");
-    ctx.strokeStyle = "#a56335";
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.moveTo(-2, 14);
-    ctx.lineTo(-5, 20);
-    ctx.moveTo(7, 14);
-    ctx.lineTo(9, 20);
-    ctx.stroke();
-    ctx.restore();
-  }
-  function draw() {
-    ctx.clearRect(0, 0, W, H);
-    rect(0, 0, W, H, "#dce9db");
-    // The town and bunting stay still: motion is reserved for the actual game.
-    ellipse(754, 78, 42, 42, "#f4d97c", null);
-    for (let i = 0; i < 5; i++) {
-      const x = 195 + i * 127;
-      ellipse(x, 80 + (i % 2) * 38, 46, 13, "#f5f5e8", null);
-    }
-    rect(130, 288, 740, 175, "#b8c6a3");
-    for (let i = 0; i < 9; i++) {
-      const x = 145 + i * 81,
-        y = 248 - (i % 3) * 19;
-      rect(x, y, 58, 82, "#a6b59a");
-      ctx.beginPath();
-      ctx.moveTo(x - 4, y);
-      ctx.lineTo(x + 29, y - 22);
-      ctx.lineTo(x + 62, y);
-      ctx.fillStyle = "#889e84";
-      ctx.fill();
-      for (let n = 0; n < 3; n++)
-        rect(x + 9 + n * 16, y + 14, 7, 12, "#dce5cc");
-    }
-    ctx.strokeStyle = "#819577";
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.moveTo(0, 72);
-    ctx.quadraticCurveTo(500, 155, 1000, 55);
-    ctx.stroke();
-    for (let i = 0; i < 15; i++) {
-      const x = i * 72,
-        y = 72 + Math.sin((i / 15) * Math.PI) * 35;
-      ctx.beginPath();
-      ctx.moveTo(x, y);
-      ctx.lineTo(x + 24, y + 3);
-      ctx.lineTo(x + 10, y + 28);
-      ctx.closePath();
-      ctx.fillStyle = i % 2 ? "#ef7056" : "#d7fc70";
-      ctx.fill();
-      ctx.stroke();
-    }
-    rect(0, 464, W, 96, "#598f8b");
-    for (let row = 0; row < 3; row++) {
-      ctx.beginPath();
-      for (let x = 0; x <= W; x += 8) {
-        const y = 475 + row * 32 + Math.sin(x / 37 + elapsed * 1.6 + row) * 4;
-        if (x === 0) ctx.moveTo(x, y);
-        else ctx.lineTo(x, y);
-      }
-      ctx.strokeStyle = row % 2 ? "#91b7a8" : "#c5d9bc";
-      ctx.lineWidth = 3;
-      ctx.stroke();
-    }
-    const sharkX = 490 + Math.sin(elapsed * 0.23) * 115;
-    ctx.beginPath();
-    ctx.moveTo(sharkX - 24, 512);
-    ctx.lineTo(sharkX + 8, 487);
-    ctx.lineTo(sharkX + 18, 512);
-    ctx.fillStyle = "#396b6a";
-    ctx.fill();
-    text("EN HELT VEGETARISK HAJ", sharkX, 542, 9, "#d3e4ca", "center");
-    rect(0, 255, 136, 305, "#87996c");
-    rect(0, 255, 136, 15, "#d7fc70");
-    rect(864, 290, 136, 270, "#87996c");
-    rect(864, 290, 136, 15, "#d7fc70");
-    for (let i = 0; i < 5; i++) {
-      rect(18 + (i % 2) * 35, 302 + i * 49, 40, 4, "#70835b");
-      rect(886 + (i % 2) * 28, 337 + i * 45, 42, 4, "#70835b");
-    }
-    text("HÖNSGÅRDEN", 65, 211, 11, "#34472d", "center");
-    text("TRANÅS", 65, 229, 10, "#677a54", "center");
-    rect(881, 319, 106, 37, "#eeeee4");
-    text("BÄRKAN 39-ish", 934, 342, 11, "#293725", "center");
-    if (portrait.complete && portrait.naturalWidth)
-      ctx.drawImage(portrait, 869, 132, 134, 158);
-    // Cake, candle and a ludicrously small party hat.
-    rect(875, 267, 24, 22, "#f7e2a8");
-    rect(875, 265, 24, 6, "#ef7056");
-    rect(885, 251, 3, 15, "#eeeee4");
-    ellipse(887, 249, 3, 5, "#efb851", null);
-    ctx.beginPath();
-    ctx.moveTo(924, 158);
-    ctx.lineTo(943, 119);
-    ctx.lineTo(954, 161);
-    ctx.fillStyle = "#d7fc70";
-    ctx.fill();
-    ctx.strokeStyle = "#293725";
-    ctx.stroke();
-    ellipse(943, 117, 4, 4, "#ef7056");
-    // The turtle is the paddle, not a jump button.
-    const bob = state === "running" ? Math.sin(elapsed * 7) * 2 : 0;
-    ellipse(paddle - 37, SHELL_Y + 27 + bob, 17, 8, "#a7bd70");
-    ellipse(paddle + 32, SHELL_Y + 29 + bob, 18, 8, "#a7bd70");
-    ellipse(paddle + 70, SHELL_Y + 8, 20, 13, "#d7df8b");
-    ellipse(paddle, SHELL_Y + 9, SHELL_HALF, 26, "#6b824b");
-    for (let i = -1; i <= 1; i++)
-      ellipse(
-        paddle + i * 31,
-        SHELL_Y + 8,
-        13,
-        16,
-        i % 2 ? "#b6c779" : "#94aa60",
-      );
-    ellipse(paddle + 77, SHELL_Y + 4, 2.5, 3, "#293725", null);
-    text("SKÖLD-BÄRKAN", paddle, SHELL_Y + 16, 8, "#263520", "center");
-    if (state === "ready") {
-      chicken({ x: 215, y: 310, vy: 100 });
-      chicken({ x: 526, y: 233, vy: -100 });
-    }
-    for (const c of chickens) chicken(c);
-    for (const e of effects) {
-      ctx.globalAlpha = Math.max(0, e.life);
-      text(e.text, e.x, e.y, 18, e.color, "center");
-    }
-    ctx.globalAlpha = 1;
+    renderer.draw(scene);
+    if (scene.mode === "running" || endAge < 1.2) frame = requestAnimationFrame(tick);
   }
   function position(event) {
     const bounds = canvas.getBoundingClientRect();
-    target = clamp(
-      ((event.clientX - bounds.left) * W) / bounds.width,
-      165,
-      823,
-    );
+    moveTurtle(((event.clientX - bounds.left) * W) / bounds.width);
   }
-  function pointerDown(event) {
-    if (state !== "running") return;
+  listen(play, "click", start);
+  listen(pause, "click", togglePause);
+  listen(canvas, "pointerdown", (event) => {
+    if (scene.mode !== "running") return;
     event.preventDefault();
+    inputMode = event.pointerType;
+    release();
     canvas.focus({ preventScroll: true });
     canvas.setPointerCapture(event.pointerId);
     position(event);
-  }
-  function pointerMove(event) {
-    if (
-      state === "running" &&
-      (event.pointerType === "mouse" ||
-        canvas.hasPointerCapture(event.pointerId))
-    )
+  });
+  listen(canvas, "pointermove", (event) => {
+    if (scene.mode !== "running") return;
+    if (event.pointerType === "mouse" || canvas.hasPointerCapture(event.pointerId)) {
+      inputMode = event.pointerType;
       position(event);
-  }
-  function keyDown(event) {
-    if (event.code === "KeyP" && !event.repeat) {
-      event.preventDefault();
-      state === "running" ? suspend() : resume();
+    }
+  });
+  listen(canvas, "pointercancel", () => suspend());
+  listen(viewport, "pointerleave", (event) => {
+    if (event.pointerType === "mouse" && inputMode === "mouse") suspend(true);
+  });
+  listen(viewport, "pointerenter", (event) => {
+    if (event.pointerType === "mouse" && scene.mode === "paused" && pointerPause) {
+      position(event);
+      run();
+    }
+  });
+  listen(window, "keydown", (event) => {
+    if (["INPUT", "TEXTAREA"].includes(event.target?.tagName)) return;
+    if (event.code === "Escape") {
+      if (expanded) setExpanded(false);
+      suspend();
       return;
     }
-    if (state !== "running") return;
-    if (event.code === "ArrowLeft" || event.code === "ArrowRight") {
+    // Space or P pauses/resumes during gameplay
+    if (scene.mode === "running" && (event.code === "KeyP" || (event.code === "Space" && !["BUTTON", "A"].includes(event.target?.tagName)))) {
       event.preventDefault();
-      if (event.code === "ArrowLeft") left = true;
-      else right = true;
+      if (!event.repeat) togglePause();
+      return;
     }
-  }
-  function keyUp(event) {
-    if (event.code === "ArrowLeft") left = false;
-    if (event.code === "ArrowRight") right = false;
-  }
-  function release() {
-    left = right = false;
-  }
-  function visibility() {
-    if (document.hidden) suspend();
-  }
-  function pauseClick() {
-    state === "running" ? suspend() : resume();
-  }
-  play.addEventListener("click", start);
-  pause.addEventListener("click", pauseClick);
-  canvas.addEventListener("pointerdown", pointerDown);
-  canvas.addEventListener("pointermove", pointerMove);
-  canvas.addEventListener("keydown", keyDown);
-  canvas.addEventListener("keyup", keyUp);
-  canvas.addEventListener("blur", release);
-  const arrowCleanups = [];
-  root.querySelectorAll("[data-direction]").forEach((button) => {
-    const down = (event) => {
-      if (state !== "running") return;
+    if (scene.mode === "paused" && (event.code === "KeyP" || event.code === "Space")) {
       event.preventDefault();
-      button.setPointerCapture(event.pointerId);
-      if (button.dataset.direction === "-1") left = true;
-      else right = true;
-    };
-    const up = () => release();
-    const click = (event) => {
-      if (event.detail === 0 && state === "running")
-        target = clamp(
-          target + Number(button.dataset.direction) * 65,
-          165,
-          823,
-        );
-    };
-    button.addEventListener("pointerdown", down);
-    button.addEventListener("pointerup", up);
-    button.addEventListener("pointercancel", up);
-    button.addEventListener("lostpointercapture", up);
-    button.addEventListener("click", click);
-    arrowCleanups.push(() => {
-      button.removeEventListener("pointerdown", down);
-      button.removeEventListener("pointerup", up);
-      button.removeEventListener("pointercancel", up);
-      button.removeEventListener("lostpointercapture", up);
-      button.removeEventListener("click", click);
-    });
+      if (!event.repeat) run();
+      return;
+    }
+    if (scene.mode === "over" && (event.code === "KeyR" || (event.code === "Space" && event.target !== play))) {
+      event.preventDefault();
+      start();
+      return;
+    }
+    if (scene.mode === "running" && ["ArrowLeft", "ArrowRight", "KeyA", "KeyD"].includes(event.code)) {
+      event.preventDefault();
+      inputMode = "keyboard";
+      heldKeys.add(event.code);
+    }
   });
-  document.addEventListener("visibilitychange", visibility);
+  listen(window, "keyup", (event) => heldKeys.delete(event.code));
+  listen(canvas, "blur", release);
+  for (const button of root.querySelectorAll("[data-direction]")) {
+    listen(button, "pointerdown", (event) => {
+      if (scene.mode !== "running") return;
+      event.preventDefault();
+      inputMode = "touch";
+      button.setPointerCapture(event.pointerId);
+      heldPointers.set(event.pointerId, Number(button.dataset.direction));
+    });
+    const up = (event) => heldPointers.delete(event.pointerId);
+    listen(button, "pointerup", up);
+    listen(button, "pointercancel", up);
+    listen(button, "lostpointercapture", up);
+    listen(button, "click", (event) => {
+      if (event.detail === 0 && scene.mode === "running") moveTurtle(scene.turtle.x + Number(button.dataset.direction) * 75);
+    });
+  }
+  function setExpanded(value) {
+    expanded = value;
+    if (value) {
+      previousOverflow = document.body.style.overflow;
+      document.body.style.overflow = "hidden";
+    } else document.body.style.overflow = previousOverflow;
+    game.classList.toggle("is-expanded", value);
+    expand.setAttribute("aria-pressed", String(value));
+    expand.setAttribute("aria-label", value ? "Lämna förstorat spelläge" : "Förstora spelet");
+    expand.textContent = value ? "Tillbaka ↙" : "Förstora ↗";
+    if (!value) canvas.scrollIntoView({ block: "center", behavior: "instant" });
+  }
+  listen(expand, "click", () => setExpanded(!expanded));
+  function syncSound() {
+    const enabled = masterSound?.getAttribute("aria-pressed") === "true";
+    sound.setAttribute("aria-pressed", String(enabled));
+    sound.setAttribute("aria-label", enabled ? "Stäng av spelljud" : "Slå på spelljud");
+    sound.textContent = enabled ? "Ljud på" : "Ljud av";
+  }
+  listen(sound, "click", () => masterSound?.click());
+  const soundObserver = new MutationObserver(syncSound);
+  if (masterSound) soundObserver.observe(masterSound, { attributes: true, attributeFilter: ["aria-pressed"] });
+  syncSound();
+  listen(document, "visibilitychange", () => { if (document.hidden) suspend(); });
+  listen(window, "blur", () => suspend());
+  listen(motion, "change", () => { scene.reducedMotion = motion.matches; renderer.draw(scene); });
   const observer = new IntersectionObserver((entries) => {
     if (!entries[0].isIntersecting) suspend();
   });
   observer.observe(canvas);
   stats();
-  draw();
+  renderer.draw(scene);
   return () => {
     cancelAnimationFrame(frame);
     observer.disconnect();
-    portrait.onload = null;
-    document.removeEventListener("visibilitychange", visibility);
-    play.removeEventListener("click", start);
-    pause.removeEventListener("click", pauseClick);
-    canvas.removeEventListener("pointerdown", pointerDown);
-    canvas.removeEventListener("pointermove", pointerMove);
-    canvas.removeEventListener("keydown", keyDown);
-    canvas.removeEventListener("keyup", keyUp);
-    canvas.removeEventListener("blur", release);
-    arrowCleanups.forEach((clean) => clean());
+    soundObserver.disconnect();
+    renderer.dispose();
+    cleanup.forEach((remove) => remove());
+    if (expanded) document.body.style.overflow = previousOverflow;
   };
 }
