@@ -94,6 +94,24 @@ function gameSound(kind) {
     case "bounce":
       tone(240, 190, 0.22, 0, 0.07, "triangle", 620);
       break;
+    case "bounce-perfect":
+      tone(587, 880, 0.14, 0, 0.07, "sine", 1174);
+      tone(880, 1320, 0.2, 0.05, 0.07, "sine", 1760);
+      break;
+    case "gold-save":
+      tone(523, 659, 0.1, 0, 0.05, "sine");
+      tone(659, 784, 0.1, 0.07, 0.05, "sine");
+      tone(784, 1046, 0.12, 0.14, 0.05, "sine");
+      tone(1046, 1318, 0.22, 0.22, 0.06, "sine");
+      break;
+    case "combo":
+      tone(440, 660, 0.11, 0, 0.05, "triangle");
+      tone(660, 880, 0.16, 0.07, 0.05, "triangle");
+      break;
+    case "rush":
+      tone(330, 392, 0.12, 0, 0.06, "sawtooth");
+      tone(440, 523, 0.2, 0.1, 0.06, "sawtooth");
+      break;
     case "saved":
       tone(660, 990, 0.1, 0, 0.045, "sine");
       tone(990, 1320, 0.16, 0.09, 0.045, "sine");

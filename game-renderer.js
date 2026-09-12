@@ -15,6 +15,7 @@ const COLOR = {
   water: '#88b9ab', waterDeep: '#4e8f87', waterDark: '#437c76', foam: '#dcefd8',
   yellow: '#f8d965', yellowLight: '#fff0a1', yellowShade: '#dcae40',
   orange: '#e99143', pink: '#e9a38a', shell: '#687d43', shellDark: '#425934',
+  gold: '#ffd54f', goldLight: '#fff59d', goldDark: '#c68400',
 };
 
 const BODY = new Path2D('M-16 0 Q-22-4-22-11 Q-15-10-11-7 C-10-17 1-21 9-17 C20-17 23-7 17 3 C13 14-10 17-16 0Z');
@@ -238,31 +239,104 @@ function water(ctx, time) {
   ctx.restore();
 }
 
+function landingIndicator(ctx, bird, turtle, time, reducedMotion, pace = 1) {
+  if (bird.phase !== 'flying' || bird.vy <= 0) return;
+  const feetY = bird.y + 17;
+  const dy = SHELL_TOP - feetY;
+  if (dy <= 0 || dy > 340) return;
+
+  const g = 620 * (bird.gravMult || 1);
+  const disc = bird.vy * bird.vy + 2 * g * dy;
+  if (disc < 0) return;
+  const t = (-bird.vy + Math.sqrt(disc)) / g;
+  if (t > 1.25) return;
+
+  const vx = (bird.vx || 120) * pace;
+  const projX = bird.x + vx * t;
+  const targetYPos = WATER + 2;
+
+  const dx = projX - turtle.x;
+  const aligned = Math.abs(dx) <= 88;
+  const isSweet = Math.abs(dx) <= 28;
+
+  // Closeness factor: 0 (far) to 1 (landing now)
+  const proximity = Math.max(0, Math.min(1, 1 - t / 1.15));
+  const radiusX = 34 - proximity * 16;
+  const radiusY = 7 - proximity * 3.5;
+
+  ctx.save();
+  ctx.translate(projX, targetYPos);
+
+  if (aligned) {
+    ctx.globalAlpha = 0.55 + proximity * 0.45;
+    ellipse(ctx, 0, 0, radiusX + 5, radiusY + 1.5, null, COLOR.foam, 1.5);
+    ellipse(ctx, 0, 0, radiusX, radiusY, isSweet ? COLOR.yellowLight : COLOR.lime, COLOR.ink, 2);
+    if (isSweet) {
+      ellipse(ctx, 0, 0, radiusX * 0.5, radiusY * 0.5, COLOR.coral, null);
+    }
+  } else {
+    ctx.globalAlpha = 0.4 + proximity * 0.4;
+    ellipse(ctx, 0, 0, radiusX, radiusY, COLOR.waterDark, COLOR.coral, 1.5);
+    if (Math.abs(dx) > 35 && proximity > 0.25) {
+      const dir = dx > 0 ? 1 : -1;
+      ctx.fillStyle = COLOR.coral;
+      ctx.beginPath();
+      ctx.moveTo(dir * (radiusX + 9), 0);
+      ctx.lineTo(dir * (radiusX + 3), -3.5);
+      ctx.lineTo(dir * (radiusX + 3), 3.5);
+      ctx.closePath();
+      ctx.fill();
+    }
+  }
+  ctx.restore();
+}
+
 function chicken(ctx, bird, time, reducedMotion, scale = 1) {
   const flying = bird.phase === 'flying';
   const walk = reducedMotion || flying ? 0 : Math.sin((bird.age || 0) * 13);
   const flap = reducedMotion ? 0 : Math.sin(time * (flying ? 24 : 8) + (bird.age || 0) * 2);
+  const type = bird.type || 'normal';
+  const effectiveScale = type === 'chonky' ? scale * 1.14 : scale;
+
   ctx.save();
   ctx.translate(bird.x, bird.y + (flying ? 0 : Math.abs(walk) * -1.3));
   ctx.rotate(reducedMotion ? 0 : bird.rotation || 0);
-  ctx.scale(scale, scale);
+  ctx.scale(effectiveScale, effectiveScale);
   if (!flying) ellipse(ctx, 0, 18, 14, 2.5, COLOR.stoneShade);
+
   // Feet end exactly seventeen world units below the controller's center.
   line(ctx, -5, 8, -6 + walk * 3, 17, COLOR.orange, 2.5);
   line(ctx, -6 + walk * 3, 17, -2 + walk * 3, 17, COLOR.orange, 2.5);
   line(ctx, 5, 8, 7 - walk * 3, 17, COLOR.orange, 2.5);
   line(ctx, 7 - walk * 3, 17, 11 - walk * 3, 17, COLOR.orange, 2.5);
-  shape(ctx, BODY, COLOR.yellow, COLOR.ink, 2);
-  shape(ctx, 'M-13 4 Q-3 17 13 6 Q7 15-3 13 Q-10 12-13 4Z', COLOR.yellowShade);
-  ellipse(ctx, 6, -10, 7, 6, COLOR.yellowLight);
-  shape(ctx, 'M5-18 Q0-25 7-22 L9-18 M10-18 Q10-24 15-23 L14-18', COLOR.yellow, COLOR.ink, 1.5);
+
+  const bodyColor = type === 'gold' ? COLOR.gold : COLOR.yellow;
+  const shadeColor = type === 'gold' ? COLOR.goldDark : COLOR.yellowShade;
+  const lightColor = type === 'gold' ? COLOR.goldLight : COLOR.yellowLight;
+
+  shape(ctx, BODY, bodyColor, COLOR.ink, 2);
+  shape(ctx, 'M-13 4 Q-3 17 13 6 Q7 15-3 13 Q-10 12-13 4Z', shadeColor);
+  ellipse(ctx, 6, -10, 7, 6, lightColor);
+  shape(ctx, 'M5-18 Q0-25 7-22 L9-18 M10-18 Q10-24 15-23 L14-18', bodyColor, COLOR.ink, 1.5);
   shape(ctx, 'M17-11 L25-7 17-4Z', COLOR.orange, COLOR.ink, 1.5);
   ellipse(ctx, 11, -10, 2.2, 3, COLOR.ink);
   ellipse(ctx, 11.7, -11, 0.7, 0.9, COLOR.cream);
   ellipse(ctx, 12, -3, 3.2, 2, COLOR.pink);
+
+  if (type === 'speedy') {
+    shape(ctx, 'M4 -15 Q11 -18 16 -13 L15 -10 Q10 -15 3 -12 Z', COLOR.coral, COLOR.ink, 1.5);
+    shape(ctx, 'M3 -13 Q-4 -18 -8 -15 Q-4 -14 2 -10 Z', COLOR.coral, COLOR.ink, 1);
+  } else if (type === 'chonky') {
+    shape(ctx, 'M7 -19 L12 -33 L17 -18 Z', COLOR.coral, COLOR.ink, 1.5);
+    ellipse(ctx, 12, -34, 2.5, 2.5, COLOR.cream);
+    line(ctx, 9, -24, 15, -24, COLOR.yellowLight, 1.5);
+  } else if (type === 'gold' && !reducedMotion && Math.sin(time * 8 + (bird.age || 0)) > 0.2) {
+    ellipse(ctx, 4, -15, 2.5, 2.5, COLOR.cream);
+  }
+
   ctx.save(); ctx.translate(-4, -1); ctx.rotate(flying ? -0.55 + flap * 0.75 : flap * 0.12);
-  shape(ctx, WING, COLOR.yellowShade, COLOR.ink, 1.5);
-  line(ctx, -9, -2, -4, 0, COLOR.yellowLight, 1.5);
+  shape(ctx, WING, shadeColor, COLOR.ink, 1.5);
+  line(ctx, -9, -2, -4, 0, lightColor, 1.5);
   ctx.restore();
   ctx.restore();
 }
@@ -302,6 +376,33 @@ function turtle(ctx, state, time, reducedMotion) {
   shape(ctx, 'M-21 8 Q0 3 20 8', null, COLOR.limeLight, 3);
   line(ctx, -59, 20, -47, 15, COLOR.lime, 2);
   line(ctx, 46, 14, 57, 19, COLOR.lime, 2);
+
+  // --- CLEAR HITBOX BOUNCE PAD & TARGET ---
+  // Left and Right bracket bumpers at -85 and +85 (marking exact hitbox width)
+  ellipse(ctx, -85, 35, 4.5, 7, COLOR.coral, COLOR.ink, 2);
+  ellipse(ctx, 85, 35, 4.5, 7, COLOR.coral, COLOR.ink, 2);
+  ellipse(ctx, -85, 34, 1.8, 3.5, COLOR.cream);
+  ellipse(ctx, 85, 34, 1.8, 3.5, COLOR.cream);
+
+  // Bounce pad bed following the shell crown
+  ctx.save();
+  shape(ctx, 'M-82 34 C-74 12 -42 2 0 2 C42 2 74 12 82 34 L78 40 C40 16 0 14 -78 40 Z', COLOR.cream, COLOR.ink, 2);
+  const padRibs = [-62, -42, -22, 22, 42, 62];
+  for (const rx of padRibs) {
+    const ry = Math.abs(rx) * 0.38 + 2;
+    line(ctx, rx, ry, rx, ry + 6, COLOR.coral, 2);
+  }
+
+  // Sweet Spot / Bullseye (Center target: -26 to +26)
+  ellipse(ctx, 0, 8, 26, 7, COLOR.yellowLight, COLOR.ink, 2);
+  ellipse(ctx, 0, 8, 14, 4, COLOR.coral, COLOR.ink, 1.5);
+  ellipse(ctx, 0, 8, 6, 2, COLOR.cream);
+
+  if (impact > 0.05) {
+    ellipse(ctx, 0, 8, 26 + impact * 35, 7 + impact * 12, null, COLOR.yellowLight, 2.5 * (1 - impact));
+  }
+  ctx.restore();
+
   ctx.restore();
 }
 
@@ -318,17 +419,18 @@ function swimmingChick(ctx, lost, index, time, reducedMotion) {
 }
 
 function effect(ctx, item, reducedMotion) {
-  const duration = item.kind === 'milestone' ? 2 : 1.2;
+  const duration = item.kind === 'milestone' ? 2 : item.kind === 'perfect' || item.kind === 'gold' ? 1.5 : 1.2;
   const progress = Math.min(1, Math.max(0, item.age / duration));
   if (progress >= 1) return;
   const splash = item.kind === 'splash';
-  const save = item.kind === 'save' || item.kind === 'milestone';
+  const save = item.kind === 'save' || item.kind === 'milestone' || item.kind === 'gold';
+  const perfect = item.kind === 'perfect';
   const travel = reducedMotion ? 0.2 : progress;
   ctx.save(); ctx.globalAlpha = (1 - progress) * (1 - progress);
-  if (splash || item.kind === 'bounce') {
-    ellipse(ctx, item.x, splash ? WATER + 10 : SHELL_TOP + 5, 12 + travel * 85, 4 + travel * 9, null, splash ? COLOR.foam : COLOR.cream, 3 - progress * 2);
+  if (splash || item.kind === 'bounce' || perfect) {
+    ellipse(ctx, item.x, splash ? WATER + 10 : SHELL_TOP + 5, 12 + travel * 85, 4 + travel * 9, null, splash ? COLOR.foam : perfect ? COLOR.yellowLight : COLOR.cream, 3 - progress * 2);
   }
-  const count = reducedMotion ? 4 : save ? 17 : 11;
+  const count = reducedMotion ? 4 : perfect || save ? 17 : 11;
   for (let i = 0; i < count; i++) {
     const angle = i * 2.399 + (item.seed || 0);
     const speed = 28 + i * 29 % 71;
@@ -336,7 +438,10 @@ function effect(ctx, item, reducedMotion) {
     const y = item.y - (25 + Math.sin(angle) * 38) * travel + (splash ? 75 : 35) * travel * travel;
     ctx.save(); ctx.translate(x, y); ctx.rotate(reducedMotion ? angle : angle + progress * 3);
     if (splash) ellipse(ctx, 0, 0, 2.5, 5, COLOR.foam);
-    else if (save) {
+    else if (perfect) {
+      ctx.fillStyle = i % 2 ? COLOR.gold : COLOR.yellowLight;
+      ctx.fillRect(-3, -3, 6, 6);
+    } else if (save) {
       ctx.fillStyle = i % 3 === 0 ? COLOR.coral : i % 3 === 1 ? COLOR.lime : COLOR.yellow;
       ctx.fillRect(-2, -4, 4, 8);
     } else {
@@ -345,12 +450,13 @@ function effect(ctx, item, reducedMotion) {
     }
     ctx.restore();
   }
-  if (save || (item.text && !splash)) {
+  if (save || perfect || (item.text && !splash)) {
     ctx.globalAlpha = Math.min(1, (1 - progress) * 3);
     const text = item.text || '+1';
-    ctx.font = `900 ${item.kind === 'milestone' ? 25 : 22}px "Arial", sans-serif`;
+    ctx.font = `900 ${item.kind === 'milestone' ? 25 : perfect ? 24 : 22}px "Arial", sans-serif`;
     ctx.textAlign = 'center'; ctx.lineWidth = 5;
-    ctx.strokeStyle = COLOR.cream; ctx.fillStyle = COLOR.mossDark;
+    ctx.strokeStyle = COLOR.cream;
+    ctx.fillStyle = perfect ? COLOR.coral : item.kind === 'gold' ? COLOR.goldDark : item.kind === 'combo' ? COLOR.coral : COLOR.mossDark;
     const x = Math.max(90, Math.min(910, item.x));
     const y = Math.max(42, item.y - 28 - travel * 34);
     ctx.strokeText(text, x, y); ctx.fillText(text, x, y);
@@ -405,6 +511,9 @@ export function createRenderer(canvas) {
       ctx.translate(Math.sin(time * 71) * scene.shake * 2, Math.cos(time * 59) * scene.shake * 1.5);
     }
     water(ctx, time);
+    for (const bird of scene.chickens) {
+      landingIndicator(ctx, bird, scene.turtle, time, scene.reducedMotion, scene.pace || 1);
+    }
     turtle(ctx, scene.turtle, time, scene.reducedMotion);
     if (scene.mode === 'ready' && !scene.chickens.length) {
       chicken(ctx, { x: 130, y: 183, age: 0, rotation: 0, phase: 'queued' }, time, scene.reducedMotion);

@@ -108,7 +108,7 @@
 }
 .bounce-hud {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   background: var(--console-deep);
   border-block: 1px solid var(--console-line);
   padding: var(--space-4) var(--space-8);
@@ -143,6 +143,10 @@
   font-variant-numeric: tabular-nums;
   color: var(--green);
   white-space: nowrap;
+}
+.bounce-hud [data-combo].is-active {
+  color: var(--yellow);
+  text-shadow: 0 0 10px rgba(248, 217, 101, 0.45);
 }
 .bounce-hud [data-tempo] {
   font-size: var(--space-6);
@@ -233,7 +237,7 @@
 }
 .bounce-result {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: var(--space-4);
   border-block: 1px solid var(--line);
   padding-block: var(--space-4);
@@ -363,6 +367,7 @@
     padding-inline: var(--space-2);
   }
   .bounce-hud {
+    grid-template-columns: repeat(auto-fit, minmax(70px, 1fr));
     padding: var(--space-3) var(--space-4);
     gap: var(--space-2);
   }

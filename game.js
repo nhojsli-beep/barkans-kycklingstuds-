@@ -4,7 +4,7 @@ const W = 1000;
 const H = 625;
 const STEP = 1 / 120;
 const SHELL_Y = 495;
-const SHELL_HALF = 85;
+const SHELL_HALF = 88;
 const FEET = 17;
 const GRAVITY = 620;
 const RECORD_KEY = "barkan-kycklingstuds-record";
@@ -14,6 +14,24 @@ const SAVED_LINES = [
   "Du kom för tårtan. Nu blir det bildspel från parkeringen.",
   "Stort hjärta. Små fåglar. Orimlig logistik.",
   "Alla ska med. Ingen kommer undan efterrätten.",
+];
+const PERFECT_LINES = [
+  "Mitt i prick! Den där studsen ska ramas in.",
+  "Ren poesi! Tranås OS-hopp i kycklingstuds!",
+  "Klockren träff! Sköldpaddan log nästan.",
+];
+const COMBO_LINES = [
+  "Vilket flyt! Bärkan bjuder på dubbla bullar!",
+  "Kalas-kombo! Hela Tranås applåderar!",
+  "Fem i rad! Nu ringer vi lokaltidningen!",
+];
+const RUSH_LINES = [
+  "FIKARUSH! Bussen från Tranås station har anlänt!",
+  "Håll i hatten! Hela hönsgården kommer på en gång!",
+];
+const GOLD_LINES = [
+  "Guldkycklingen är i hamn! Spara fjädern!",
+  "En guldgäst! Den får sitta vid honnörsbordet.",
 ];
 const MISS_LINES = [
   "Det där var vattenvägen. Enligt min plan.",
@@ -38,6 +56,7 @@ export function initGame() {
       <div class="bounce-hud" aria-label="Spelstatistik">
         <div><span>PÅ KALASET</span><strong data-score>0</strong></div>
         <div><span>LIV KVAR</span><strong data-lives aria-label="3 av 3 liv"><i></i><i></i><i></i></strong></div>
+        <div><span>KOMBO</span><strong data-combo>—</strong></div>
         <div><span>PERSONBÄSTA</span><strong data-best>0</strong></div>
         <div><span>TEMPO</span><strong data-tempo>1.00×</strong></div>
       </div>
@@ -46,8 +65,13 @@ export function initGame() {
         <div class="bounce-overlay"><div class="bounce-panel">
           <p class="eyebrow" data-overlay-kicker>ETT KALAS. INGEN BRO. DIN TUR.</p>
           <h4 data-overlay-title>ALLA SKA MED.<br>INGEN KAN SIMMA.</h4>
-          <p data-overlay-copy>Följ kycklingarna med sköldpaddan. Studsa dem hela vägen till Bärkans kalas — och hinna tillbaka för nästa. En på land = en poäng. Tre plask = slut.</p>
-          <div class="bounce-result" hidden><div><span>RÄDDADE</span><strong data-result-score>0</strong></div><div><span>STUDSAR</span><strong data-result-bounces>0</strong></div><div><span>TID</span><strong data-result-time>0:00</strong></div></div>
+          <p data-overlay-copy>Följ kycklingarna med sköldpaddan. Studsa dem hela vägen till Bärkans kalas — och hinna tillbaka för nästa. Träffa mitt på skalet för Perfekt Studs. En på land = en poäng. Tre plask = slut.</p>
+          <div class="bounce-result" hidden>
+            <div><span>RÄDDADE</span><strong data-result-score>0</strong></div>
+            <div><span>STUDSAR</span><strong data-result-bounces>0</strong></div>
+            <div><span>BÄSTA KOMBO</span><strong data-result-combo>0</strong></div>
+            <div><span>PERFEKTA</span><strong data-result-perfect>0</strong></div>
+          </div>
           <button type="button" class="button primary" data-play>SLÄPP KYCKLINGARNA ↗</button>
         </div></div>
       </div>
@@ -70,6 +94,7 @@ export function initGame() {
   const scoreNode = root.querySelector("[data-score]");
   const livesNode = root.querySelector("[data-lives]");
   const lifePips = [...livesNode.children];
+  const comboNode = root.querySelector("[data-combo]");
   const bestNode = root.querySelector("[data-best]");
   const tempoNode = root.querySelector("[data-tempo]");
   const comment = root.querySelector("[data-comment]");
@@ -79,8 +104,10 @@ export function initGame() {
   const motion = matchMedia("(prefers-reduced-motion: reduce)");
   const scene = {
     mode: "ready", time: 0, score: 0, misses: 0,
-    turtle: { x: 307, impact: 0, facing: 1 },
+    turtle: { x: 307, impact: 0, facing: 1, vx: 0 },
     chickens: [], effects: [], lost: [], shake: 0,
+    combo: 0, maxCombo: 0, perfectBounces: 0,
+    rushActive: false, rushLeft: 0, pace: 1,
     reducedMotion: motion.matches,
   };
   let best = 0;
@@ -116,6 +143,10 @@ export function initGame() {
     bestNode.textContent = best;
     livesNode.setAttribute("aria-label", `${3 - scene.misses} av 3 liv`);
     lifePips.forEach((pip, i) => pip.classList.toggle("lost", i >= 3 - scene.misses));
+    if (comboNode) {
+      comboNode.textContent = scene.combo > 1 ? `${scene.combo}×` : "—";
+      comboNode.classList.toggle("is-active", scene.combo > 1);
+    }
     tempoNode.textContent = `${pace.toFixed(2)}×`;
     root.dataset.state = scene.mode;
   }
@@ -147,13 +178,16 @@ export function initGame() {
   function start() {
     if (scene.mode === "paused") { run(); return; }
     scene.time = scene.score = scene.misses = 0;
+    scene.combo = scene.maxCombo = scene.perfectBounces = 0;
+    scene.rushActive = false;
+    scene.rushLeft = 0;
     scene.chickens.length = scene.effects.length = scene.lost.length = 0;
     scene.turtle.x = 307;
-    scene.turtle.impact = scene.shake = 0;
+    scene.turtle.impact = scene.shake = scene.turtle.vx = 0;
     scene.turtle.facing = 1;
     spawnIn = 0.25;
     wave = bounces = endAge = 0;
-    pace = 1;
+    scene.pace = pace = 1;
     inputMode = "keyboard";
     release();
     say("Välkomna! Bron är inställd. Sköldpaddan är bokad.");
@@ -196,7 +230,8 @@ export function initGame() {
     result.hidden = false;
     root.querySelector("[data-result-score]").textContent = scene.score;
     root.querySelector("[data-result-bounces]").textContent = bounces;
-    root.querySelector("[data-result-time]").textContent = `${Math.floor(scene.time / 60)}:${String(Math.floor(scene.time % 60)).padStart(2, "0")}`;
+    root.querySelector("[data-result-combo]").textContent = `${scene.maxCombo}×`;
+    root.querySelector("[data-result-perfect]").textContent = scene.perfectBounces;
     say(MISS_LINES[2]);
     signal("over");
     stats();
@@ -206,8 +241,10 @@ export function initGame() {
     scene.effects.push({ kind, x, y, age: 0, seed: wave + bounces + scene.score, text });
   }
   function moveTurtle(x) {
-    const next = clamp(x, 255, 785);
-    if (Math.abs(next - scene.turtle.x) > 0.2) scene.turtle.facing = next > scene.turtle.x ? 1 : -1;
+    const next = clamp(x, 245, 795);
+    const dx = next - scene.turtle.x;
+    if (Math.abs(dx) > 0.2) scene.turtle.facing = dx > 0 ? 1 : -1;
+    scene.turtle.vx = dx / STEP;
     scene.turtle.x = next;
   }
   function update(dt) {
@@ -220,19 +257,66 @@ export function initGame() {
     }
     const direction = Number(movingRight) - Number(movingLeft);
     if (direction) moveTurtle(scene.turtle.x + direction * 950 * dt);
+    else scene.turtle.vx *= 0.8;
+
     spawnIn -= dt;
     if (spawnIn <= 0) {
-      scene.chickens.push({ x: -22, y: 183, vy: 0, rotation: 0, phase: "queued", age: 0 });
-      spawnIn += Math.max(1.2, 2.15 - scene.score * 0.009) * CADENCE[wave++ % CADENCE.length] / pace;
+      if (!scene.rushActive && scene.score >= 10 && scene.score % 12 === 0) {
+        scene.rushActive = true;
+        scene.rushLeft = 3;
+        effect("milestone", 500, 120, "FIKARUSH! ALLA SKA MED!");
+        say(RUSH_LINES[Math.floor(Math.random() * RUSH_LINES.length)]);
+        signal("rush");
+      }
+
+      let type = "normal";
+      let baseVx = 120;
+      let gravMult = 1.0;
+
+      if (scene.rushActive && scene.rushLeft > 0) {
+        scene.rushLeft--;
+        if (scene.rushLeft === 0) scene.rushActive = false;
+        spawnIn = 0.75 / pace;
+        if (Math.random() < 0.4) {
+          type = "gold";
+          baseVx = 126;
+        }
+      } else {
+        const rand = Math.random();
+        if (scene.score >= 4 && rand < 0.18) {
+          type = "gold";
+          baseVx = 125;
+          gravMult = 0.96;
+        } else if (scene.score >= 7 && rand < 0.40) {
+          type = "speedy";
+          baseVx = 152;
+          gravMult = 1.04;
+        } else if (scene.score >= 12 && rand < 0.54) {
+          type = "chonky";
+          baseVx = 112;
+          gravMult = 1.14;
+        }
+        spawnIn = Math.max(1.1, 2.1 - scene.score * 0.008) * CADENCE[wave++ % CADENCE.length] / pace;
+      }
+
+      scene.chickens.push({
+        x: -22, y: 183, vy: 0, vx: baseVx, gravMult,
+        rotation: 0, phase: "queued", age: 0, type,
+      });
     }
-    // Speed changes scale time, not trajectories: every bird remains catchable.
+
     const flightDt = dt * pace;
     for (let i = scene.chickens.length - 1; i >= 0; i--) {
       const c = scene.chickens[i];
       c.age += dt;
       if (c.phase === "queued") {
-        c.x += 100 * flightDt;
-        if (c.x >= 150) { c.x = 150; c.vy = -180; c.phase = "flying"; c.age = 0; }
+        c.x += (c.vx ? c.vx * 0.85 : 100) * flightDt;
+        if (c.x >= 150) {
+          c.x = 150;
+          c.vy = c.type === "chonky" ? -160 : c.type === "gold" ? -195 : -180;
+          c.phase = "flying";
+          c.age = 0;
+        }
         continue;
       }
       if (c.phase === "landed") {
@@ -242,52 +326,111 @@ export function initGame() {
       }
       const oldFeet = c.y + FEET;
       const oldX = c.x;
-      c.x += 120 * flightDt;
-      c.y += c.vy * flightDt + GRAVITY * flightDt * flightDt / 2;
-      c.vy += GRAVITY * flightDt;
-      c.rotation += flightDt * 2.7;
-      // Like the reference, crossing onto the lower right bank ends the trip.
+      const g = GRAVITY * (c.gravMult || 1);
+      const vx = c.vx || 120;
+      c.x += vx * flightDt;
+      c.y += c.vy * flightDt + g * flightDt * flightDt / 2;
+      c.vy += g * flightDt;
+      c.rotation += flightDt * (c.type === "speedy" ? 3.8 : 2.7);
+
       if (c.x >= 870 && c.y + FEET <= 355) {
         c.phase = "landed";
         c.y = 338;
         c.rotation = 0;
         c.age = 0;
-        scene.score++;
-        pace = Math.min(1.5, 1 + scene.score * 0.004);
-        effect("save", 900, 315, "+1");
-        if (scene.score % 10 === 0) {
-          effect("milestone", 500, 120, `${scene.score} PÅ KALASET!`);
-          say(`${scene.score} gäster! Nu börjar mitt alldeles korta tal.`);
-          signal("milestone");
+
+        let points = 1;
+        if (c.type === "gold") points = 3;
+        if (scene.combo >= 6) points += 2;
+        else if (scene.combo >= 3) points += 1;
+
+        scene.score += points;
+        pace = Math.min(1.55, 1 + scene.score * 0.0035);
+        scene.pace = pace;
+
+        if (c.type === "gold") {
+          effect("gold", 900, 305, `+${points} GULD!`);
+          say(GOLD_LINES[Math.floor(Math.random() * GOLD_LINES.length)]);
+          signal("gold-save");
+        } else if (points > 1) {
+          effect("save", 900, 315, `+${points} KOMBO!`);
+          signal("combo");
+          if (scene.combo >= 5) say(COMBO_LINES[Math.floor(Math.random() * COMBO_LINES.length)]);
         } else {
-          if (scene.score === 1 || scene.score % 4 === 0) say(SAVED_LINES[Math.floor(scene.score / 4) % SAVED_LINES.length]);
-          signal("saved");
+          effect("save", 900, 315, "+1");
+          if (scene.score % 10 === 0) {
+            effect("milestone", 500, 120, `${scene.score} PÅ KALASET!`);
+            say(`${scene.score} gäster! Nu börjar mitt alldeles korta tal.`);
+            signal("milestone");
+          } else {
+            if (scene.score === 1 || scene.score % 4 === 0) say(SAVED_LINES[Math.floor(scene.score / 4) % SAVED_LINES.length]);
+            signal("saved");
+          }
         }
         stats();
         continue;
       }
-      if (c.vy > 0 && oldFeet <= SHELL_Y && c.y + FEET >= SHELL_Y) {
-        const crossing = (SHELL_Y - oldFeet) / (c.y + FEET - oldFeet);
-        const hitX = oldX + (c.x - oldX) * crossing;
-        if (Math.abs(hitX - scene.turtle.x) <= SHELL_HALF + 7) {
+
+      const newFeet = c.y + FEET;
+      const crossed = c.vy > 0 && oldFeet <= SHELL_Y && newFeet >= SHELL_Y;
+      const sweptIn = c.vy > 0 && newFeet >= SHELL_Y - 14 && newFeet <= SHELL_Y + 30;
+
+      if (crossed || sweptIn) {
+        let hitX = c.x;
+        if (crossed && newFeet !== oldFeet) {
+          const crossing = (SHELL_Y - oldFeet) / (newFeet - oldFeet);
+          hitX = oldX + (c.x - oldX) * crossing;
+        }
+        const dx = hitX - scene.turtle.x;
+        const shellHalf = SHELL_HALF + 5;
+
+        if (Math.abs(dx) <= shellHalf) {
+          const norm = dx / SHELL_HALF;
+          const isSweet = Math.abs(norm) <= 0.35;
+
           c.y = SHELL_Y - FEET;
-          c.vy = -690;
-          bounces++;
           scene.turtle.impact = 1;
-          effect("bounce", hitX, SHELL_Y);
-          signal("bounce");
+          bounces++;
+          scene.combo++;
+          if (scene.combo > scene.maxCombo) scene.maxCombo = scene.combo;
+
+          if (isSweet) {
+            scene.perfectBounces++;
+            c.vy = c.type === "chonky" ? -705 : -735;
+            c.vx = (c.vx || 120) + 10;
+            effect("perfect", hitX, SHELL_Y - 15, "PERFEKT!");
+            signal("bounce-perfect");
+            if (Math.random() < 0.4) say(PERFECT_LINES[Math.floor(Math.random() * PERFECT_LINES.length)]);
+          } else if (norm > 0.35) {
+            c.vy = -675;
+            c.vx = Math.min(175, (c.vx || 120) + 30 * norm);
+            effect("bounce", hitX, SHELL_Y, "FRAMÅT!");
+            signal("bounce");
+          } else {
+            c.vy = -740;
+            c.vx = Math.max(90, (c.vx || 120) - 18);
+            effect("bounce", hitX, SHELL_Y, "RÄDDAD!");
+            signal("bounce");
+          }
+
+          if (scene.combo >= 2) {
+            effect("combo", scene.turtle.x, SHELL_Y - 50, `${scene.combo}× KOMBO!`);
+          }
+          stats();
         }
       }
+
       if (c.y > H - 35 || c.x > W + 30) {
         scene.lost.push({ x: clamp(c.x, 205, 840) });
         effect("splash", c.x, 505, "PLASK!");
         scene.chickens.splice(i, 1);
         scene.misses++;
+        scene.combo = 0;
         scene.shake = 1;
         signal("splash");
-        say(MISS_LINES[scene.misses - 1]);
+        say(MISS_LINES[Math.min(scene.misses - 1, MISS_LINES.length - 1)]);
         stats();
-        if (scene.misses === 3) { end(); break; }
+        if (scene.misses >= 3) { end(); break; }
       }
     }
   }
