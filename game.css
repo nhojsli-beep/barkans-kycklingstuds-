@@ -249,30 +249,6 @@
   font-variant-numeric: tabular-nums;
   margin-top: var(--space-1);
 }
-.bounce-comment {
-  display: flex;
-  align-items: center;
-  gap: var(--space-5);
-  background: var(--green);
-  color: var(--ink);
-  padding: var(--space-4) var(--space-8);
-  min-height: 56px;
-  border-top: 1px solid var(--ink);
-}
-.bounce-comment > span {
-  font-size: var(--type-label);
-  font-weight: 800;
-  letter-spacing: 0.08em;
-  white-space: nowrap;
-  border-right: 1px solid var(--ink);
-  padding-right: var(--space-5);
-}
-.bounce-comment p {
-  font-size: var(--type-small);
-  font-weight: 600;
-  margin: 0;
-  line-height: 1.6;
-}
 .bounce-bottom {
   display: flex;
   align-items: center;
@@ -405,16 +381,6 @@
   .bounce-result {
     gap: var(--space-2);
   }
-  .bounce-comment {
-    display: block;
-    padding: var(--space-3) var(--space-4);
-  }
-  .bounce-comment > span {
-    display: block;
-    border: 0;
-    padding: 0;
-    margin-bottom: var(--space-1);
-  }
   .bounce-bottom {
     flex-wrap: wrap;
     padding: var(--space-4);
@@ -448,18 +414,13 @@
     width: 100%;
     aspect-ratio: auto;
   }
-  .bounce-game.is-expanded .bounce-bottom p,
-  .bounce-game.is-expanded .bounce-comment {
+  .bounce-game.is-expanded .bounce-bottom p {
     display: none;
   }
 }
 @media (max-height: 650px) and (min-width: 701px) {
   .bounce-game.is-expanded .bounce-top {
     padding-block: var(--space-3);
-  }
-  .bounce-game.is-expanded .bounce-top .eyebrow,
-  .bounce-game.is-expanded .bounce-comment {
-    display: none;
   }
   .bounce-game.is-expanded .bounce-hud,
   .bounce-game.is-expanded .bounce-bottom {

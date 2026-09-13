@@ -108,22 +108,12 @@ function gameSound(kind) {
       tone(440, 660, 0.11, 0, 0.05, "triangle");
       tone(660, 880, 0.16, 0.07, 0.05, "triangle");
       break;
-    case "rush":
-      tone(330, 392, 0.12, 0, 0.06, "sawtooth");
-      tone(440, 523, 0.2, 0.1, 0.06, "sawtooth");
-      break;
     case "saved":
       tone(660, 990, 0.1, 0, 0.045, "sine");
       tone(990, 1320, 0.16, 0.09, 0.045, "sine");
       break;
     case "splash":
       splash();
-      break;
-    case "milestone":
-      tone(523, 523, 0.14, 0, 0.05);
-      tone(659, 659, 0.14, 0.12, 0.05);
-      tone(784, 784, 0.16, 0.24, 0.05);
-      tone(1047, 1047, 0.3, 0.38, 0.05);
       break;
     case "start":
       tone(330, 440, 0.12, 0, 0.05);

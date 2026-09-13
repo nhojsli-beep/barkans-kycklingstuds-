@@ -239,7 +239,7 @@ function water(ctx, time) {
   ctx.restore();
 }
 
-function landingIndicator(ctx, bird, turtle, time, reducedMotion, pace = 1) {
+function landingIndicator(ctx, bird, turtle, time, reducedMotion) {
   if (bird.phase !== 'flying' || bird.vy <= 0) return;
   const feetY = bird.y + 17;
   const dy = SHELL_TOP - feetY;
@@ -249,18 +249,19 @@ function landingIndicator(ctx, bird, turtle, time, reducedMotion, pace = 1) {
   const disc = bird.vy * bird.vy + 2 * g * dy;
   if (disc < 0) return;
   const t = (-bird.vy + Math.sqrt(disc)) / g;
-  if (t > 1.25) return;
+  const seconds = t / (bird.pace || 1);
+  if (seconds > 1.6) return;
 
-  const vx = (bird.vx || 120) * pace;
+  const vx = bird.vx || 120;
   const projX = bird.x + vx * t;
-  const targetYPos = WATER + 2;
+  const targetYPos = SHELL_TOP + 2;
 
   const dx = projX - turtle.x;
   const aligned = Math.abs(dx) <= 88;
-  const isSweet = Math.abs(dx) <= 28;
+  const isSweet = Math.abs(dx) <= 88 * 0.35;
 
   // Closeness factor: 0 (far) to 1 (landing now)
-  const proximity = Math.max(0, Math.min(1, 1 - t / 1.15));
+  const proximity = Math.max(0, Math.min(1, 1 - seconds / 1.5));
   const radiusX = 34 - proximity * 16;
   const radiusY = 7 - proximity * 3.5;
 
@@ -419,29 +420,41 @@ function swimmingChick(ctx, lost, index, time, reducedMotion) {
 }
 
 function effect(ctx, item, reducedMotion) {
-  const duration = item.kind === 'milestone' ? 2 : item.kind === 'perfect' || item.kind === 'gold' ? 1.5 : 1.2;
+  const duration = item.kind === 'perfect' || item.kind === 'gold' ? 1.5 : 1.2;
   const progress = Math.min(1, Math.max(0, item.age / duration));
   if (progress >= 1) return;
   const splash = item.kind === 'splash';
-  const save = item.kind === 'save' || item.kind === 'milestone' || item.kind === 'gold';
-  const perfect = item.kind === 'perfect';
+  const bounce = item.kind === 'bounce' || item.kind === 'perfect';
   const travel = reducedMotion ? 0.2 : progress;
-  ctx.save(); ctx.globalAlpha = (1 - progress) * (1 - progress);
-  if (splash || item.kind === 'bounce' || perfect) {
-    ellipse(ctx, item.x, splash ? WATER + 10 : SHELL_TOP + 5, 12 + travel * 85, 4 + travel * 9, null, splash ? COLOR.foam : perfect ? COLOR.yellowLight : COLOR.cream, 3 - progress * 2);
+
+  ctx.save();
+  ctx.globalAlpha = (1 - progress) * (1 - progress);
+  if (splash || bounce) {
+    ellipse(
+      ctx,
+      item.x,
+      splash ? WATER + 10 : SHELL_TOP + 5,
+      12 + travel * 85,
+      4 + travel * 9,
+      null,
+      splash ? COLOR.foam : item.kind === 'perfect' ? COLOR.yellowLight : COLOR.cream,
+      3 - progress * 2,
+    );
   }
-  const count = reducedMotion ? 4 : perfect || save ? 17 : 11;
+  const count = reducedMotion ? 4 : item.kind === 'perfect' || item.kind === 'save' || item.kind === 'gold' ? 17 : 11;
   for (let i = 0; i < count; i++) {
     const angle = i * 2.399 + (item.seed || 0);
     const speed = 28 + i * 29 % 71;
     const x = item.x + Math.cos(angle) * speed * travel;
     const y = item.y - (25 + Math.sin(angle) * 38) * travel + (splash ? 75 : 35) * travel * travel;
-    ctx.save(); ctx.translate(x, y); ctx.rotate(reducedMotion ? angle : angle + progress * 3);
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.rotate(reducedMotion ? angle : angle + progress * 3);
     if (splash) ellipse(ctx, 0, 0, 2.5, 5, COLOR.foam);
-    else if (perfect) {
+    else if (item.kind === 'perfect') {
       ctx.fillStyle = i % 2 ? COLOR.gold : COLOR.yellowLight;
       ctx.fillRect(-3, -3, 6, 6);
-    } else if (save) {
+    } else if (item.kind === 'save' || item.kind === 'gold' || item.kind === 'combo') {
       ctx.fillStyle = i % 3 === 0 ? COLOR.coral : i % 3 === 1 ? COLOR.lime : COLOR.yellow;
       ctx.fillRect(-2, -4, 4, 8);
     } else {
@@ -449,17 +462,6 @@ function effect(ctx, item, reducedMotion) {
       line(ctx, 0, -4, 0, 6, COLOR.yellowShade, 1);
     }
     ctx.restore();
-  }
-  if (save || perfect || (item.text && !splash)) {
-    ctx.globalAlpha = Math.min(1, (1 - progress) * 3);
-    const text = item.text || '+1';
-    ctx.font = `900 ${item.kind === 'milestone' ? 25 : perfect ? 24 : 22}px "Arial", sans-serif`;
-    ctx.textAlign = 'center'; ctx.lineWidth = 5;
-    ctx.strokeStyle = COLOR.cream;
-    ctx.fillStyle = perfect ? COLOR.coral : item.kind === 'gold' ? COLOR.goldDark : item.kind === 'combo' ? COLOR.coral : COLOR.mossDark;
-    const x = Math.max(90, Math.min(910, item.x));
-    const y = Math.max(42, item.y - 28 - travel * 34);
-    ctx.strokeText(text, x, y); ctx.fillText(text, x, y);
   }
   ctx.restore();
 }
@@ -512,7 +514,7 @@ export function createRenderer(canvas) {
     }
     water(ctx, time);
     for (const bird of scene.chickens) {
-      landingIndicator(ctx, bird, scene.turtle, time, scene.reducedMotion, scene.pace || 1);
+      landingIndicator(ctx, bird, scene.turtle, time, scene.reducedMotion);
     }
     turtle(ctx, scene.turtle, time, scene.reducedMotion);
     if (scene.mode === 'ready' && !scene.chickens.length) {
