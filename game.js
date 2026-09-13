@@ -94,6 +94,7 @@ export function initGame() {
   let released = 0;
   let waveSize = 0;
   let waveLeft = 0;
+  let intraSpacing = 0.25;
 
   const hudState = { score: -1, best: -1, misses: -1, combo: "", pace: -1, mode: "" };
   let bounces = 0;
@@ -182,6 +183,7 @@ export function initGame() {
     scene.level = 1;
     waveSize = 0;
     waveLeft = 0;
+    intraSpacing = 0.25;
     bounces = endAge = 0;
     scene.pace = pace = 1;
     inputMode = "keyboard";
@@ -234,13 +236,104 @@ export function initGame() {
   function effect(kind, x, y) {
     scene.effects.push({ kind, x, y, age: 0, seed: scene.wave + bounces + scene.score });
   }
+  function flightProgress(t) {
+    return t + 0.006 * t * t;
+  }
+  function timeFromFlightProgress(F) {
+    return (-1 + Math.sqrt(Math.max(0, 1 + 0.024 * F))) / 0.012;
+  }
+
+  function getLandingsForCandidate(tLaunch, vx, vy, gravMult) {
+    const g = GRAVITY * gravMult;
+    const d1 = SHELL_Y - (183 + FEET);
+    const deltaF1 = (-vy + Math.sqrt(Math.max(0, vy * vy + 2 * g * d1))) / g;
+    const x1 = 150 + vx * deltaF1;
+    const nowF = flightProgress(tLaunch);
+    const t1 = timeFromFlightProgress(nowF + deltaF1);
+
+    const deltaF2 = deltaF1 + BOUNCE_TIME;
+    const x2 = x1 + vx * BOUNCE_TIME;
+    const t2 = timeFromFlightProgress(nowF + deltaF2);
+
+    const deltaF3 = deltaF2 + BOUNCE_TIME;
+    const x3 = x2 + vx * BOUNCE_TIME;
+    const t3 = timeFromFlightProgress(nowF + deltaF3);
+
+    return [
+      { t: t1, x: x1, bounce: 1 },
+      { t: t2, x: x2, bounce: 2 },
+      { t: t3, x: x3, bounce: 3 },
+    ];
+  }
+
+  function getRemainingLandings(c, now) {
+    if (c.phase !== "flying" || c.bounces >= REQUIRED_BOUNCES) return [];
+    const g = GRAVITY * (c.gravMult || 1);
+    const vx = c.vx || 106;
+    const d = Math.max(0, SHELL_Y - (c.y + FEET));
+    const disc = Math.max(0, c.vy * c.vy + 2 * g * d);
+    const deltaF = (-c.vy + Math.sqrt(disc)) / g;
+    const nextX = c.x + vx * deltaF;
+    const nowF = flightProgress(now);
+    const nextT = timeFromFlightProgress(nowF + deltaF);
+
+    const landings = [{ t: nextT, x: nextX, bounce: c.bounces + 1 }];
+    let prevDeltaF = deltaF;
+    let prevX = nextX;
+    for (let b = c.bounces + 2; b <= REQUIRED_BOUNCES; b++) {
+      const bDeltaF = prevDeltaF + BOUNCE_TIME;
+      const bX = prevX + vx * BOUNCE_TIME;
+      const bT = timeFromFlightProgress(nowF + bDeltaF);
+      landings.push({ t: bT, x: bX, bounce: b });
+      prevDeltaF = bDeltaF;
+      prevX = bX;
+    }
+    return landings;
+  }
+
+  function canCandidateLaunch(candidateLandings, sceneChickens, now, pace) {
+    const turtleSpeed = 950 * Math.max(1, pace * 0.75);
+    for (const c of sceneChickens) {
+      const activeLandings = getRemainingLandings(c, now);
+      for (const active of activeLandings) {
+        for (const cand of candidateLandings) {
+          const dx = Math.abs(cand.x - active.x);
+          const dt = Math.abs(cand.t - active.t);
+          if (dx > 70) {
+            const reqDt = dx / turtleSpeed + 0.28;
+            if (dt < reqDt) return false;
+          } else {
+            if (dt < 0.16) return false;
+          }
+        }
+      }
+    }
+    return true;
+  }
+
   function spawnChicken() {
     if (waveLeft <= 0) {
+      const activeCatchers = scene.chickens.filter(c => c.phase === "flying" && c.bounces < REQUIRED_BOUNCES);
+      if (activeCatchers.length > 0) {
+        // Förra vågen studsar fortfarande; vänta tills de är klara så att det ALLTID går att ta alla
+        spawnIn = 0.04 / pace;
+        return false;
+      }
+
       scene.wave += 1;
       scene.level = Math.floor((scene.wave - 1) / 3) + 1;
-      // Slumpa antal i gruppen (t.ex. 2, 3, 4 eller 5 kycklingar)
-      waveSize = Math.floor(Math.random() * 4) + 2;
+
+      // Anpassa flockstorlek efter speltempot så att det ALLTID är mänskligt möjligt att hinna ta alla
+      const turtleSpeed = 950 * Math.max(1, pace * 0.75);
+      const travelTime = 228 / turtleSpeed;
+      const maxSpan = (BOUNCE_TIME / pace) - (travelTime + 0.25);
+      const maxAllowed = Math.max(2, Math.min(5, Math.floor(maxSpan / 0.16) + 1));
+      const minAllowed = 2;
+      waveSize = Math.floor(Math.random() * (maxAllowed - minAllowed + 1)) + minAllowed;
       waveLeft = waveSize;
+
+      const targetSpacing = Math.min(0.26 / pace, maxSpan / (waveSize - 1 + 0.2));
+      intraSpacing = Math.max(0.16, targetSpacing);
     }
 
     const roll = Math.random();
@@ -260,6 +353,13 @@ export function initGame() {
     }
 
     const launchVy = -175 - Math.random() * 15;
+    const candidateLandings = getLandingsForCandidate(scene.time, vx, launchVy, gravMult);
+
+    if (!canCandidateLaunch(candidateLandings, scene.chickens, scene.time, pace)) {
+      spawnIn = 0.03 / pace;
+      return false;
+    }
+
     // Kycklingarna hoppar direkt ut i luften från klippkanten
     scene.chickens.push({
       x: 150, y: 183, vy: launchVy, vx, gravMult,
@@ -269,11 +369,11 @@ export function initGame() {
     released += 1;
     waveLeft -= 1;
 
-    // Om det finns fler i samma grupp hoppar nästa snabbt i rytm, annars paus mellan grupper
+    // Om det finns fler i samma grupp hoppar nästa i rytm, annars paus mellan grupper
     if (waveLeft > 0) {
-      spawnIn = (0.42 + Math.random() * 0.18) / pace;
+      spawnIn = intraSpacing;
     } else {
-      spawnIn = (1.5 + Math.random() * 0.7) / pace;
+      spawnIn = (0.5 + Math.random() * 0.3) / pace;
     }
     stats();
     return true;
