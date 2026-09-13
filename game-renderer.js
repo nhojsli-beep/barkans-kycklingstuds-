@@ -17,6 +17,7 @@ const COLOR = {
   orange: '#e99143', pink: '#e9a38a', shell: '#687d43', shellDark: '#425934',
   gold: '#ffd54f', goldLight: '#fff59d', goldDark: '#c68400',
 };
+const PATH_CACHE = new Map();
 
 const BODY = new Path2D('M-16 0 Q-22-4-22-11 Q-15-10-11-7 C-10-17 1-21 9-17 C20-17 23-7 17 3 C13 14-10 17-16 0Z');
 const WING = new Path2D('M2-2 C-4-10-17-9-13-1 Q-10 8 2-2Z');
@@ -37,7 +38,9 @@ function ellipse(ctx, x, y, rx, ry, fill, stroke, width = 2) {
 }
 
 function shape(ctx, path, fill, stroke, width = 2) {
-  const geometry = typeof path === 'string' ? new Path2D(path) : path;
+  const geometry = typeof path === 'string'
+    ? (PATH_CACHE.get(path) || PATH_CACHE.set(path, new Path2D(path)).get(path))
+    : path;
   if (fill) { ctx.fillStyle = fill; ctx.fill(geometry); }
   if (stroke) { ctx.strokeStyle = stroke; ctx.lineWidth = width; ctx.stroke(geometry); }
 }
@@ -240,7 +243,7 @@ function water(ctx, time) {
 }
 
 function landingIndicator(ctx, bird, turtle, time, reducedMotion) {
-  if (bird.phase !== 'flying' || bird.vy <= 0) return;
+  if (bird.phase !== 'flying' || bird.vy <= 0 || (bird.bounces || 0) >= 3) return;
   const feetY = bird.y + 17;
   const dy = SHELL_TOP - feetY;
   if (dy <= 0 || dy > 340) return;
@@ -254,6 +257,7 @@ function landingIndicator(ctx, bird, turtle, time, reducedMotion) {
 
   const vx = bird.vx || 120;
   const projX = bird.x + vx * t;
+  if (projX >= 865) return;
   const targetYPos = SHELL_TOP + 2;
 
   const dx = projX - turtle.x;
@@ -414,7 +418,8 @@ function swimmingChick(ctx, lost, index, time, reducedMotion) {
   chicken(ctx, { x, y: y - 10, age: index, phase: 'flying', rotation: 0 }, reducedMotion ? 0 : time * 0.35, reducedMotion, 0.7);
   ellipse(ctx, x, y, 18, 7, COLOR.coral, COLOR.ink, 2);
   ellipse(ctx, x, y - 2, 11, 3.5, COLOR.water, COLOR.redDark, 1.5);
-  shape(ctx, `M${x - 14} ${y - 3} L${x - 10} ${y + 4} M${x + 12} ${y - 4} L${x + 9} ${y + 5}`, null, COLOR.cream, 4);
+  line(ctx, x - 14, y - 3, x - 10, y + 4, COLOR.cream, 4);
+  line(ctx, x + 12, y - 4, x + 9, y + 5, COLOR.cream, 4);
   // Body peeks over the back of the ring, rather than being swallowed by it.
   ellipse(ctx, x, y - 5, 8, 3, COLOR.yellow);
 }

@@ -7,12 +7,14 @@ const SHELL_Y = 495;
 const SHELL_HALF = 88;
 const FEET = 17;
 const GRAVITY = 620;
-const BOUNCE_TIME = 2.3;
+const BOUNCE_TIME = 2.15;
+const REQUIRED_BOUNCES = 3;
 const RECORD_KEY = "barkan-kycklingstuds-record";
 const WAVE_SIZE = 3;
 const WAVES_PER_LEVEL = 3;
-const LEVEL_PACE_STEP = 0.035;
-const MAX_PACE = 1.4;
+const LEVEL_PACE_STEP = 0.075;
+const MAX_PACE = 2;
+const MAX_ACTIVE_CHICKENS = 3;
 const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
 
 export function initGame() {
@@ -36,11 +38,11 @@ export function initGame() {
         <div><span>TEMPO</span><strong data-tempo>1.00×</strong></div>
       </div>
       <div class="bounce-viewport">
-        <canvas width="1000" height="625" tabindex="0" aria-label="Styr sköldpaddan och håll upp till tre kycklingar igång över vattnet. De släpps en i taget. Tre missar avslutar rundan." aria-describedby="bounce-instructions"></canvas>
+        <canvas width="1000" height="625" tabindex="0" aria-label="Styr sköldpaddan och få varje kyckling att studsa tre gånger över vattnet. Kycklingarna kommer i överlappande rytmer. Tre missar avslutar rundan." aria-describedby="bounce-instructions"></canvas>
         <div class="bounce-overlay"><div class="bounce-panel">
           <p class="eyebrow" data-overlay-kicker>ETT KALAS. INGEN BRO. DIN TUR.</p>
           <h4 data-overlay-title>ALLA SKA MED.<br>INGEN KAN SIMMA.</h4>
-          <p data-overlay-copy>Kycklingarna kommer en i taget i varierad takt. Håll upp till tre igång och studsa dem till Bärkans kalas. Sikta på landningsmarkörerna och träffa mitt på skalet för Perfekt Studs. Guldgäster och kombo ger bonuspoäng. Tre plask = slut.</p>
+          <p data-overlay-copy>Kycklingarna kommer i överlappande rytmer med gradvis högre tempo. Få varje kyckling att studsa tre gånger på skalet innan den når kalaset. Sikta på landningsmarkörerna och träffa mitt på skalet för Perfekt Studs. Guldgäster och kombo ger bonuspoäng. Tre plask = slut.</p>
           <div class="bounce-result" hidden>
             <div><span>RÄDDADE</span><strong data-result-score>0</strong></div>
             <div><span>STUDSAR</span><strong data-result-bounces>0</strong></div>
@@ -51,7 +53,7 @@ export function initGame() {
         </div></div>
       </div>
 
-      <div class="bounce-bottom"><p id="bounce-instructions"><strong>FLYTTA. FÅNGA. TILLBAKA IGEN.</strong><br>Mus / dra med fingret / ← → eller A D · P / mellanslag = paus<br>Musen utanför spelplanen pausar automatiskt.</p><div class="bounce-arrows" aria-label="Flytta sköldpaddan"><button type="button" data-direction="-1" aria-label="Flytta vänster">←</button><button type="button" data-direction="1" aria-label="Flytta höger">→</button></div></div>
+      <div class="bounce-bottom"><p id="bounce-instructions"><strong>FLYTTA. FÅNGA. PRIORITERA.</strong><br>Mus / dra med fingret / ← → eller A D · P / mellanslag = paus<br>Flera kycklingar kan vara i luften samtidigt. Musen utanför spelplanen pausar automatiskt.</p><div class="bounce-arrows" aria-label="Flytta sköldpaddan"><button type="button" data-direction="-1" aria-label="Flytta vänster">←</button><button type="button" data-direction="1" aria-label="Flytta höger">→</button></div></div>
     </section>`;
   const canvas = root.querySelector("canvas");
   if (!canvas.getContext("2d")) {
@@ -96,6 +98,7 @@ export function initGame() {
   let spawnIn = 0.25;
   let released = 0;
 
+  const hudState = { score: -1, best: -1, misses: -1, combo: "", pace: -1, mode: "" };
   let bounces = 0;
   let pace = 1;
   let endAge = 0;
@@ -115,16 +118,33 @@ export function initGame() {
     root.dispatchEvent(new CustomEvent("barkan-game-sound", { detail: kind }));
   }
   function stats() {
-    scoreNode.textContent = scene.score;
-    bestNode.textContent = best;
-    livesNode.setAttribute("aria-label", `${3 - scene.misses} av 3 liv`);
-    lifePips.forEach((pip, i) => pip.classList.toggle("lost", i >= 3 - scene.misses));
-    if (comboNode) {
-      comboNode.textContent = scene.combo > 1 ? `${scene.combo}×` : "—";
+    if (hudState.score !== scene.score) {
+      hudState.score = scene.score;
+      scoreNode.textContent = scene.score;
+    }
+    if (hudState.best !== best) {
+      hudState.best = best;
+      bestNode.textContent = best;
+    }
+    if (hudState.misses !== scene.misses) {
+      hudState.misses = scene.misses;
+      livesNode.setAttribute("aria-label", `${3 - scene.misses} av 3 liv`);
+      lifePips.forEach((pip, i) => pip.classList.toggle("lost", i >= 3 - scene.misses));
+    }
+    const combo = scene.combo > 1 ? `${scene.combo}×` : "—";
+    if (hudState.combo !== combo) {
+      hudState.combo = combo;
+      comboNode.textContent = combo;
       comboNode.classList.toggle("is-active", scene.combo > 1);
     }
-    tempoNode.textContent = `${pace.toFixed(2)}×`;
-    root.dataset.state = scene.mode;
+    if (hudState.pace !== pace) {
+      hudState.pace = pace;
+      tempoNode.textContent = `${pace.toFixed(2)}×`;
+    }
+    if (hudState.mode !== scene.mode) {
+      hudState.mode = scene.mode;
+      root.dataset.state = scene.mode;
+    }
   }
   function showPanel(kicker, title, copy, action) {
     root.querySelector("[data-overlay-kicker]").textContent = kicker;
@@ -218,26 +238,29 @@ export function initGame() {
   function spawnChicken() {
     let active = 0;
     for (const bird of scene.chickens) {
-      if (bird.phase === "queued") return;
+      if (bird.phase === "queued") return false;
       if (bird.phase !== "landed") active += 1;
     }
-    if (active >= 3) return;
-    const wave = Math.floor(released / WAVE_SIZE) + 1;
+    const activeLimit = Math.min(MAX_ACTIVE_CHICKENS, 1 + Math.floor((released + 1) / 2));
+    if (active >= activeLimit) return false;
+    const sequence = released + 1;
+    const wave = Math.floor((sequence - 1) / WAVE_SIZE) + 1;
     const level = Math.floor((wave - 1) / WAVES_PER_LEVEL) + 1;
     scene.wave = wave;
     scene.level = level;
-    pace = Math.min(MAX_PACE, 1 + (wave - 1) * LEVEL_PACE_STEP);
+    // Raise flight pace between waves as well as at wave boundaries.
+    pace = Math.min(MAX_PACE, 1 + ((sequence - 1) / WAVE_SIZE) * LEVEL_PACE_STEP);
     scene.pace = pace;
     const roll = Math.random();
     let type = "normal";
     let gravMult = 1;
-    let vx = 132 + Math.random() * 12;
+    let vx = 104 + Math.random() * 5;
     if (level >= 2 && roll < 0.18) {
       type = "gold";
       gravMult = 0.96;
     } else if (level >= 3 && roll < 0.38) {
       type = "speedy";
-      vx += 8;
+      vx += 3;
       gravMult = 1.04;
     } else if (level >= 4 && roll < 0.54) {
       type = "chonky";
@@ -245,8 +268,8 @@ export function initGame() {
     }
     scene.chickens.push({
       x: -22, y: 183, vy: 0, vx, gravMult, pace,
-      rotation: 0, phase: "queued", launchVy: -170 - Math.random() * 30,
-      age: 0, type, wave,
+      rotation: 0, phase: "queued", launchVy: -175 - Math.random() * 15,
+      bounces: 0, age: 0, type, wave,
     });
     released += 1;
     // Separate arrivals, with a little breathing room between hidden waves.
@@ -261,11 +284,11 @@ export function initGame() {
       if (other.phase !== "flying" || other.y + FEET > SHELL_Y) continue;
       const otherG = GRAVITY * other.gravMult;
       const next = (-other.vy + Math.sqrt(other.vy * other.vy + 2 * otherG * (SHELL_Y - FEET - other.y))) / otherG;
-      for (let a = 0; a < 3; a += 1) {
+      for (let a = 0; a < REQUIRED_BOUNCES; a += 1) {
         const birdTime = first + a * BOUNCE_TIME;
         const birdX = 150 + bird.vx * birdTime;
         if (birdX > 870) break;
-        for (let b = 0; b < 3; b += 1) {
+        for (let b = 0; b < REQUIRED_BOUNCES; b += 1) {
           const otherTime = next + b * BOUNCE_TIME;
           const otherX = other.x + other.vx * otherTime;
           if (otherX > 870) break;
@@ -293,12 +316,12 @@ export function initGame() {
       if (direction === 1) movingRight = true;
       else movingLeft = true;
     }
-    const direction = Number(movingRight) - Number(movingLeft);
-    if (direction) moveTurtle(scene.turtle.x + direction * 950 * dt);
-    else scene.turtle.vx *= 0.8;
-
     spawnIn -= dt;
-    if (spawnIn <= 0) spawnChicken();
+    if (spawnIn <= 0 && !spawnChicken()) {
+      // Avoid rescanning a full queue every fixed update while preserving the retry.
+      spawnIn = 0.2 / pace;
+    }
+
 
     for (let i = scene.chickens.length - 1; i >= 0; i--) {
       const c = scene.chickens[i];
@@ -332,8 +355,9 @@ export function initGame() {
       c.y += c.vy * flightDt + g * flightDt * flightDt / 2;
       c.vy += g * flightDt;
       c.rotation += flightDt * (c.type === "speedy" ? 3.8 : 2.7);
+      const newFeet = c.y + FEET;
 
-      if (c.x >= 870 && c.y + FEET <= 355) {
+      if (c.bounces >= REQUIRED_BOUNCES && c.x >= 870 && c.vy > 0 && newFeet >= 355) {
         c.phase = "landed";
         c.y = 338;
         c.rotation = 0;
@@ -360,7 +384,6 @@ export function initGame() {
         continue;
       }
 
-      const newFeet = c.y + FEET;
       const crossed = c.vy > 0 && oldFeet <= SHELL_Y && newFeet >= SHELL_Y;
 
       if (crossed) {
@@ -376,6 +399,7 @@ export function initGame() {
           c.x = hitX;
           c.y = SHELL_Y - FEET;
           scene.turtle.impact = 1;
+          c.bounces += 1;
           bounces++;
           scene.combo++;
           if (scene.combo > scene.maxCombo) scene.maxCombo = scene.combo;
