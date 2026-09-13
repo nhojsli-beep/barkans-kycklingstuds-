@@ -242,7 +242,101 @@ function water(ctx, time) {
   ctx.restore();
 }
 
-function landingIndicator(ctx, bird, turtle, time, reducedMotion) {
+function bannerPlane(ctx, time, reducedMotion) {
+  const cycleWidth = W + 560;
+  const speed = 55;
+  const planeX = ((time * speed + 320) % cycleWidth) - 460;
+  const bob = reducedMotion ? 0 : Math.sin(time * 2.2) * 4.5;
+  const planeY = 56 + bob;
+
+  if (planeX < -460 || planeX > W + 60) return;
+
+  ctx.save();
+  ctx.translate(planeX, planeY);
+
+  // Tow line from plane tail to banner
+  const towEndX = -48;
+  const towWave = reducedMotion ? 0 : Math.sin(time * 4) * 2;
+  const towEndY = 2 + towWave;
+  line(ctx, -22, 1, towEndX, towEndY, COLOR.ink, 1.5);
+
+  // Fluttering banner
+  const bannerW = 285;
+  const bannerH = 26;
+  const bannerX = towEndX - bannerW;
+  const bannerY = towEndY - bannerH / 2;
+
+  ctx.save();
+  ctx.beginPath();
+  const segments = 8;
+  const segW = bannerW / segments;
+
+  // Top wavy edge
+  for (let i = 0; i <= segments; i++) {
+    const sx = bannerX + i * segW;
+    const wave = reducedMotion ? 0 : Math.sin(time * 5.5 - i * 0.7) * 2.8;
+    const sy = bannerY + wave;
+    if (i === 0) ctx.moveTo(sx, sy);
+    else ctx.lineTo(sx, sy);
+  }
+
+  // Right edge connected to tow line
+  const rightWave = reducedMotion ? 0 : Math.sin(time * 5.5 - segments * 0.7) * 2.8;
+  ctx.lineTo(towEndX, bannerY + bannerH + rightWave);
+
+  // Bottom wavy edge (drawn backwards)
+  for (let i = segments; i >= 0; i--) {
+    const sx = bannerX + i * segW;
+    const wave = reducedMotion ? 0 : Math.sin(time * 5.5 - i * 0.7) * 2.8;
+    const sy = bannerY + bannerH + wave;
+    ctx.lineTo(sx, sy);
+  }
+
+  // Swallowtail notch cut on the left end
+  const notchWave = reducedMotion ? 0 : Math.sin(time * 5.5) * 2.8;
+  ctx.lineTo(bannerX + 14, bannerY + bannerH / 2 + notchWave);
+  ctx.closePath();
+
+  ctx.fillStyle = COLOR.paper;
+  ctx.fill();
+  ctx.strokeStyle = COLOR.ink;
+  ctx.lineWidth = 1.8;
+  ctx.stroke();
+
+  // Banner text: "John äger och Jonathan suger rumpa"
+  ctx.fillStyle = COLOR.ink;
+  ctx.font = 'bold 12px "Arial", sans-serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  const midWave = reducedMotion ? 0 : Math.sin(time * 5.5 - 2.8) * 2.5;
+  ctx.fillText('John äger och Jonathan suger rumpa', bannerX + bannerW / 2 + 8, bannerY + bannerH / 2 + midWave);
+  ctx.restore();
+
+  // Retro monoplane
+  shape(ctx, 'M-22 2 Q-20-8 0-7 Q18-6 22 0 Q18 7 0 7 Q-20 7-22 2Z', COLOR.coral, COLOR.ink, 2);
+  shape(ctx, 'M-18 2 Q-5 7 14 5 Q18 6 12 7 Q-5 8-18 2Z', COLOR.cream);
+  shape(ctx, 'M-2-6 Q5-11 10-6 L10-4 L-2-4 Z', COLOR.skyLow, COLOR.ink, 1.5);
+
+  // Pilot chick with aviator goggles
+  ellipse(ctx, 3, -7, 4.5, 4.5, COLOR.yellow, COLOR.ink, 1.2);
+  ellipse(ctx, 5, -8, 2, 2, COLOR.ink);
+  ellipse(ctx, 6, -8, 0.8, 0.8, COLOR.skyLow);
+  ellipse(ctx, 1, -8, 2, 2, COLOR.ink);
+  ellipse(ctx, 2, -8, 0.8, 0.8, COLOR.skyLow);
+
+  // Wing and tail fin
+  shape(ctx, 'M-4 1 L-10 9 L1 9 L8 1 Z', COLOR.redDark, COLOR.ink, 1.5);
+  shape(ctx, 'M-22 2 L-27-10 L-18-10 L-16 0 Z', COLOR.coral, COLOR.ink, 1.5);
+
+  // Propeller
+  ellipse(ctx, 22, 0, 2.5, 4, COLOR.yellow, COLOR.ink, 1.2);
+  const propSpin = reducedMotion ? 5 : Math.cos(time * 35) * 8;
+  line(ctx, 23, -propSpin, 23, propSpin, COLOR.cream, 2);
+
+  ctx.restore();
+}
+
+function landingIndicator(ctx, bird, turtle, time, reducedMotion, pace = 1) {
   if (bird.phase !== 'flying' || bird.vy <= 0 || (bird.bounces || 0) >= 3) return;
   const feetY = bird.y + 17;
   const dy = SHELL_TOP - feetY;
@@ -252,7 +346,7 @@ function landingIndicator(ctx, bird, turtle, time, reducedMotion) {
   const disc = bird.vy * bird.vy + 2 * g * dy;
   if (disc < 0) return;
   const t = (-bird.vy + Math.sqrt(disc)) / g;
-  const seconds = t / (bird.pace || 1);
+  const seconds = t / (pace || bird.pace || 1);
   if (seconds > 1.6) return;
 
   const vx = bird.vx || 120;
@@ -517,9 +611,10 @@ export function createRenderer(canvas) {
     if (!scene.reducedMotion && scene.shake > 0) {
       ctx.translate(Math.sin(time * 71) * scene.shake * 2, Math.cos(time * 59) * scene.shake * 1.5);
     }
+    bannerPlane(ctx, time, scene.reducedMotion);
     water(ctx, time);
     for (const bird of scene.chickens) {
-      landingIndicator(ctx, bird, scene.turtle, time, scene.reducedMotion);
+      landingIndicator(ctx, bird, scene.turtle, time, scene.reducedMotion, scene.pace);
     }
     turtle(ctx, scene.turtle, time, scene.reducedMotion);
     if (scene.mode === 'ready' && !scene.chickens.length) {

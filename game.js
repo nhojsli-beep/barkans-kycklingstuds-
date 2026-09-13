@@ -10,11 +10,6 @@ const GRAVITY = 620;
 const BOUNCE_TIME = 2.15;
 const REQUIRED_BOUNCES = 3;
 const RECORD_KEY = "barkan-kycklingstuds-record";
-const WAVE_SIZE = 3;
-const WAVES_PER_LEVEL = 3;
-const LEVEL_PACE_STEP = 0.075;
-const MAX_PACE = 2;
-const MAX_ACTIVE_CHICKENS = 3;
 const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
 
 export function initGame() {
@@ -97,6 +92,8 @@ export function initGame() {
   let accumulator = 0;
   let spawnIn = 0.25;
   let released = 0;
+  let waveSize = 0;
+  let waveLeft = 0;
 
   const hudState = { score: -1, best: -1, misses: -1, combo: "", pace: -1, mode: "" };
   let bounces = 0;
@@ -179,10 +176,12 @@ export function initGame() {
     scene.turtle.x = 307;
     scene.turtle.impact = scene.shake = scene.turtle.vx = 0;
     scene.turtle.facing = 1;
-    spawnIn = 0.25;
+    spawnIn = 0.5;
     released = 0;
     scene.wave = 0;
     scene.level = 1;
+    waveSize = 0;
+    waveLeft = 0;
     bounces = endAge = 0;
     scene.pace = pace = 1;
     inputMode = "keyboard";
@@ -236,69 +235,47 @@ export function initGame() {
     scene.effects.push({ kind, x, y, age: 0, seed: scene.wave + bounces + scene.score });
   }
   function spawnChicken() {
-    let active = 0;
-    for (const bird of scene.chickens) {
-      if (bird.phase === "queued") return false;
-      if (bird.phase !== "landed") active += 1;
+    if (waveLeft <= 0) {
+      scene.wave += 1;
+      scene.level = Math.floor((scene.wave - 1) / 3) + 1;
+      // Slumpa antal i gruppen (t.ex. 2, 3, 4 eller 5 kycklingar)
+      waveSize = Math.floor(Math.random() * 4) + 2;
+      waveLeft = waveSize;
     }
-    const activeLimit = Math.min(MAX_ACTIVE_CHICKENS, 1 + Math.floor((released + 1) / 2));
-    if (active >= activeLimit) return false;
-    const sequence = released + 1;
-    const wave = Math.floor((sequence - 1) / WAVE_SIZE) + 1;
-    const level = Math.floor((wave - 1) / WAVES_PER_LEVEL) + 1;
-    scene.wave = wave;
-    scene.level = level;
-    // Raise flight pace between waves as well as at wave boundaries.
-    pace = Math.min(MAX_PACE, 1 + ((sequence - 1) / WAVE_SIZE) * LEVEL_PACE_STEP);
-    scene.pace = pace;
+
     const roll = Math.random();
     let type = "normal";
     let gravMult = 1;
     let vx = 104 + Math.random() * 5;
-    if (level >= 2 && roll < 0.18) {
+    if (scene.level >= 2 && roll < 0.18) {
       type = "gold";
       gravMult = 0.96;
-    } else if (level >= 3 && roll < 0.38) {
+    } else if (scene.level >= 3 && roll < 0.38) {
       type = "speedy";
       vx += 3;
       gravMult = 1.04;
-    } else if (level >= 4 && roll < 0.54) {
+    } else if (scene.level >= 4 && roll < 0.54) {
       type = "chonky";
       gravMult = 1.1;
     }
+
+    const launchVy = -175 - Math.random() * 15;
+    // Kycklingarna hoppar direkt ut i luften från klippkanten
     scene.chickens.push({
-      x: -22, y: 183, vy: 0, vx, gravMult, pace,
-      rotation: 0, phase: "queued", launchVy: -175 - Math.random() * 15,
-      bounces: 0, age: 0, type, wave,
+      x: 150, y: 183, vy: launchVy, vx, gravMult,
+      rotation: 0, phase: "flying", launchVy,
+      bounces: 0, age: 0, type, wave: scene.wave,
     });
     released += 1;
-    // Separate arrivals, with a little breathing room between hidden waves.
-    spawnIn = (1.05 + Math.random() * 0.65 + (released % WAVE_SIZE === 0 ? 0.35 : 0)) / pace;
-    stats();
-  }
-  function canLaunch(bird) {
-    const g = GRAVITY * bird.gravMult;
-    const first = (-bird.launchVy + Math.sqrt(bird.launchVy * bird.launchVy + 2 * g * (SHELL_Y - FEET - bird.y))) / g;
-    // Compare upcoming catches, not just spawn times. Leave time to cross the lake.
-    for (const other of scene.chickens) {
-      if (other.phase !== "flying" || other.y + FEET > SHELL_Y) continue;
-      const otherG = GRAVITY * other.gravMult;
-      const next = (-other.vy + Math.sqrt(other.vy * other.vy + 2 * otherG * (SHELL_Y - FEET - other.y))) / otherG;
-      for (let a = 0; a < REQUIRED_BOUNCES; a += 1) {
-        const birdTime = first + a * BOUNCE_TIME;
-        const birdX = 150 + bird.vx * birdTime;
-        if (birdX > 870) break;
-        for (let b = 0; b < REQUIRED_BOUNCES; b += 1) {
-          const otherTime = next + b * BOUNCE_TIME;
-          const otherX = other.x + other.vx * otherTime;
-          if (otherX > 870) break;
-          const distance = Math.abs(birdX - otherX);
-          if (distance <= SHELL_HALF) continue;
-          const travel = distance / 950 + 0.18;
-          if (Math.abs(birdTime / bird.pace - otherTime / other.pace) < travel) return false;
-        }
-      }
+    waveLeft -= 1;
+
+    // Om det finns fler i samma grupp hoppar nästa snabbt i rytm, annars paus mellan grupper
+    if (waveLeft > 0) {
+      spawnIn = (0.42 + Math.random() * 0.18) / pace;
+    } else {
+      spawnIn = (1.5 + Math.random() * 0.7) / pace;
     }
+    stats();
     return true;
   }
   function moveTurtle(x) {
@@ -310,37 +287,30 @@ export function initGame() {
   }
   function update(dt) {
     scene.time += dt;
+    // Tiden går snabbare och snabbare hela tiden
+    pace = 1 + scene.time * 0.012;
+    scene.pace = pace;
+
     let movingRight = heldKeys.has("ArrowRight") || heldKeys.has("KeyD");
     let movingLeft = heldKeys.has("ArrowLeft") || heldKeys.has("KeyA");
     for (const direction of heldPointers.values()) {
       if (direction === 1) movingRight = true;
       else movingLeft = true;
     }
+    const dir = Number(movingRight) - Number(movingLeft);
+    if (dir) moveTurtle(scene.turtle.x + dir * (950 * Math.max(1, pace * 0.75)) * dt);
+    else scene.turtle.vx *= 0.8;
+
     spawnIn -= dt;
-    if (spawnIn <= 0 && !spawnChicken()) {
-      // Avoid rescanning a full queue every fixed update while preserving the retry.
-      spawnIn = 0.2 / pace;
+    if (spawnIn <= 0) {
+      spawnChicken();
     }
 
+    const flightDt = dt * pace;
 
     for (let i = scene.chickens.length - 1; i >= 0; i--) {
       const c = scene.chickens[i];
-      let flightDt = dt * c.pace;
       c.age += dt;
-      if (c.phase === "queued") {
-        const walkSpeed = 140;
-        const walkTime = (150 - c.x) / walkSpeed;
-        if (walkTime > flightDt) {
-          c.x += walkSpeed * flightDt;
-          continue;
-        }
-        flightDt -= walkTime;
-        c.x = 150;
-        if (!canLaunch(c)) continue;
-        c.vy = c.launchVy;
-        c.phase = "flying";
-        c.age = 0;
-      }
       if (c.phase === "landed") {
         c.x += 95 * flightDt;
         if (c.x > W + 30) scene.chickens.splice(i, 1);
@@ -350,7 +320,7 @@ export function initGame() {
       const oldX = c.x;
       const oldVy = c.vy;
       const g = GRAVITY * (c.gravMult || 1);
-      const vx = c.vx || 120;
+      const vx = c.vx || 106;
       c.x += vx * flightDt;
       c.y += c.vy * flightDt + g * flightDt * flightDt / 2;
       c.vy += g * flightDt;
