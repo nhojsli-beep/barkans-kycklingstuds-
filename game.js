@@ -14,7 +14,7 @@ const GRAVITY = 780;
 const VX = 210 / BOUNCE_TIME; // 116.667 px/s
 const BOUNCE_VY = GRAVITY * (BOUNCE_TIME / 2); // 702 px/s
 const LAUNCH_VY = -24; // gentle hop off cliff (x=150, y=183) to reach B1 at t=0.90s, x=255, y=478
-const WALK_SPEED = 65; // px/s on cliff top
+const WALK_SPEED = 55; // px/s on cliff top
 const CLIFF_EDGE_X = 150;
 const CLIFF_Y = 183;
 const REQUIRED_BOUNCES = 3;
@@ -255,27 +255,23 @@ export function initGame() {
     scene.wave = waveCount;
     scene.level = Math.floor((waveCount - 1) / 4) + 1;
 
-    // Wave size scaling based on score:
+    // Wave size scaling:
     let size = 1;
-    if (scene.score < 2) size = 1;
-    else if (scene.score < 6) size = 2;
-    else if (scene.score < 14) size = Math.random() < 0.4 ? 2 : 3;
-    else if (scene.score < 30) size = Math.random() < 0.5 ? 3 : 4;
-    else if (scene.score < 60) size = Math.floor(Math.random() * 3) + 3; // 3, 4, or 5
-    else size = Math.floor(Math.random() * 3) + 3; // 3, 4, or 5
+    if (scene.score < 5) size = 1;
+    else if (scene.score < 12) size = (waveCount % 2 === 0 ? 2 : 1);
+    else if (scene.score < 25) size = 2;
+    else size = (Math.random() < 0.4 ? 3 : 2);
 
     // Spacing between chickens within wave (time between consecutive jumps):
-    if (scene.score >= 50) currentWaveSpacing = 0.86 + Math.random() * 0.08;
-    else if (scene.score >= 25) currentWaveSpacing = 0.98 + Math.random() * 0.10;
-    else if (scene.score >= 10) currentWaveSpacing = 1.12 + Math.random() * 0.10;
-    else currentWaveSpacing = 1.25;
+    // 0.90s creates the perfect alternating double-tap cadence without collisions
+    currentWaveSpacing = 0.90;
 
-    // Queue chickens on the cliff walking out towards the jump edge
-    const leadTargetX = CLIFF_EDGE_X;
+    // Queue chickens walking out from far left of cliff across the open plateau
+    const leadStartX = -20;
     const spacingPx = WALK_SPEED * currentWaveSpacing;
 
     for (let i = 0; i < size; i++) {
-      const startX = leadTargetX - 15 - i * spacingPx;
+      const startX = leadStartX - i * spacingPx;
       let type = "normal";
       if (scene.level >= 2 && Math.random() < 0.18) type = "gold";
 
@@ -294,14 +290,8 @@ export function initGame() {
       });
     }
 
-    // Pause before the subsequent wave:
-    // Every 7 waves, give a breathing pause (4.5s) like in the WR video
-    if (waveCount % 7 === 0) {
-      waveTimer = 4.8;
-    } else {
-      const basePause = scene.score >= 40 ? 2.0 : scene.score >= 15 ? 2.5 : 3.2;
-      waveTimer = basePause + Math.random() * 0.5;
-    }
+    // Next wave will only trigger after this wave has completely finished its catches.
+    waveTimer = 1.4;
   }
 
   function moveTurtle(x) {
@@ -327,8 +317,12 @@ export function initGame() {
     else scene.turtle.vx *= 0.8;
 
     // Wave spawning logic:
-    const hasQueued = scene.chickens.some(c => c.phase === "queued");
-    if (!hasQueued) {
+    // Only spawn a new wave when all active flying catches AND queued cliff walks are finished!
+    const hasActiveCatchers = scene.chickens.some(
+      c => (c.phase === "flying" && c.bounces < REQUIRED_BOUNCES) || c.phase === "queued"
+    );
+
+    if (!hasActiveCatchers) {
       waveTimer -= dt;
       if (waveTimer <= 0) {
         triggerNextWave();
@@ -466,10 +460,9 @@ export function initGame() {
 
   function tick(now) {
     if (scene.mode !== "running" && scene.mode !== "over") return;
-    const delta = Math.max(0, (now - last) / 1000);
+    const delta = Math.min(0.1, Math.max(0, (now - last) / 1000));
     last = now;
-    if (delta > 0.5 && scene.mode === "running") { suspend(); return; }
-    accumulator += Math.min(delta, 0.1);
+    accumulator += delta;
     while (accumulator >= STEP) {
       if (scene.mode === "running") update(STEP);
       else endAge += STEP;

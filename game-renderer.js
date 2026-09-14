@@ -106,21 +106,7 @@ function birch(ctx, x, y, scale) {
 }
 
 function barn(ctx) {
-  shape(ctx, 'M14 111 L64 69 116 110 116 191 14 191Z', COLOR.red, COLOR.ink, 3);
-  shape(ctx, 'M5 111 L64 62 124 111 118 118 64 77 12 119Z', COLOR.mossDark, COLOR.ink, 3);
-  shape(ctx, 'M17 119 L111 119 111 129 17 129Z', COLOR.coral);
-  for (let x = 24; x < 115; x += 13) line(ctx, x, 128, x, 187, COLOR.redDark, 2);
-  shape(ctx, 'M52 192 L52 143 Q66 130 80 143 L80 192Z', COLOR.redDark, COLOR.cream, 4);
-  line(ctx, 67, 140, 67, 191, COLOR.cream, 2);
-  line(ctx, 54, 149, 78, 185, COLOR.paper, 2);
-  ellipse(ctx, 65, 103, 9, 9, COLOR.sky, COLOR.cream, 4);
-  line(ctx, 58, 103, 72, 103, COLOR.cream, 2);
-  line(ctx, 65, 96, 65, 111, COLOR.cream, 2);
-  shape(ctx, 'M18 130 L36 130 36 151 18 151Z', COLOR.sky, COLOR.cream, 3);
-  line(ctx, 27, 131, 27, 150, COLOR.cream);
-  label(ctx, 'ÄGGSTRA ALLT', 21, 170, 5, COLOR.cream);
-  line(ctx, 104, 64, 104, 91, COLOR.ink, 2);
-  shape(ctx, 'M104 64 L119 70 104 75Z', COLOR.coral);
+  // Huset borttaget så hela klippan är öppen och man ser kycklingarna komma och gå
 }
 
 function cliffs(ctx) {
@@ -142,7 +128,6 @@ function cliffs(ctx) {
   shape(ctx, 'M883 345 L1000 346 1000 353 876 354 Q870 352 883 345Z', COLOR.lime);
   // Root threads keep the cliffs hand-drawn, without busying the flight path.
   shape(ctx, 'M151 206 Q142 225 151 239 M145 221 L132 228 M892 362 Q901 379 894 395 M899 379 L910 383', null, COLOR.moss, 2);
-  label(ctx, 'HÖNSGÅRDEN', 25, 237, 10);
   label(ctx, '40-ÅRSKALAS', 891, 391, 10);
 }
 
@@ -210,8 +195,7 @@ function scenery(ctx, portrait) {
   }
   ctx.globalAlpha = 1;
   cliffs(ctx);
-  birch(ctx, 21, 192, 0.63);
-  barn(ctx);
+  // Öppen klipplatå för fri sikt på gående kycklingar
   party(ctx, portrait);
   for (let i = 0; i < 11; i++) {
     const x = i < 6 ? 124 + i * 8 : 944 + (i - 6) * 12;
@@ -621,7 +605,7 @@ export function createRenderer(canvas) {
       chicken(ctx, { x: 62, y: 183, age: 2, rotation: 0, phase: 'queued' }, time, scene.reducedMotion);
     }
     for (const bird of scene.chickens) {
-      if (bird.phase === 'queued' && bird.x < 25) continue;
+      if (bird.phase === 'queued' && bird.x < -25) continue;
       chicken(ctx, bird, time, scene.reducedMotion);
     }
     for (let i = 0; i < scene.lost.length && i < 3; i++) swimmingChick(ctx, scene.lost[i], i, time, scene.reducedMotion);
