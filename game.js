@@ -1,10 +1,10 @@
-import { createRenderer } from "./game-renderer.js?v=3";
+import { createRenderer } from "./game-renderer.js?v=4";
 
 const W = 1000;
 const H = 625;
 const STEP = 1 / 120;
 const SHELL_Y = 495;
-const SHELL_HALF = 96;
+const SHELL_HALF = 105;
 const FEET = 17;
 
 // Constant physics matching Tigers Kycklingstuds WR video:
@@ -192,9 +192,8 @@ export function initGame() {
     scene.turtle.impact = scene.shake = scene.turtle.vx = 0;
     scene.turtle.facing = 1;
     scene.turtle.shellHalf = SHELL_HALF;
-    released = 0;
+    waveTimer = 0.2;
     waveCount = 0;
-    waveTimer = 0.5;
     scene.wave = 1;
     scene.level = 1;
     bounces = endAge = 0;
@@ -254,21 +253,20 @@ export function initGame() {
   function triggerNextWave() {
     waveCount++;
     scene.wave = waveCount;
-    scene.level = Math.floor((waveCount - 1) / 4) + 1;
+    scene.level = Math.floor((waveCount - 1) / 3) + 1;
 
-    // Wave size scaling:
+    // Snabb svårighetsökning med fler kycklingar direkt från start:
     let size = 1;
-    if (scene.score < 2) size = 1;
-    else if (scene.score < 6) size = 2;
-    else if (scene.score < 14) size = Math.random() < 0.4 ? 2 : 3;
-    else if (scene.score < 30) size = 3;
-    else size = Math.floor(Math.random() * 2) + 3; // 3 or 4
+    if (scene.score < 1) size = 1;      // Våg 1: 1 kyckling (snabbstart)
+    else if (scene.score < 4) size = 2; // Våg 2-3: 2 kycklingar
+    else if (scene.score < 8) size = Math.random() < 0.35 ? 2 : 3; // Våg 4+: 2-3 kycklingar
+    else size = 3;                      // Våg 6+: 3 kycklingar
 
-    // Spacing between chickens within wave (time between consecutive jumps):
-    currentWaveSpacing = 1.20;
+    // 2.70s avstånd (1.5 * T) ger en perfekt 0.90s reaktionslucka för varje studs över sjön
+    currentWaveSpacing = 2.70;
 
-    // Queue chickens walking in line across the open cliff:
-    const leadStartX = 40;
+    // Första kycklingen startar nära kanten (x=100) i våg 1 så den hoppar på under 1 sek!
+    const leadStartX = waveCount === 1 ? 100 : 60;
     const spacingPx = WALK_SPEED * currentWaveSpacing;
 
     for (let i = 0; i < size; i++) {
@@ -291,8 +289,7 @@ export function initGame() {
       });
     }
 
-    // Pause before the subsequent wave starts:
-    waveTimer = 2.4;
+    waveTimer = 1.2;
   }
 
   function moveTurtle(x) {
@@ -317,14 +314,12 @@ export function initGame() {
     if (dir) moveTurtle(scene.turtle.x + dir * 1400 * dt);
     else scene.turtle.vx *= 0.8;
 
-    // Wave spawning logic:
-    // Next wave begins once the current wave has finished its early catches (B1 & B2)
-    // and no chickens are still walking on the cliff!
-    const hasActiveEarly = scene.chickens.some(
-      c => (c.phase === "flying" && c.bounces < 2) || c.phase === "queued"
+    // Våg-logik: En ny våg startar FÖRST när föregående vågs kycklingar klarat alla 3 studsar
+    const hasActiveCatchers = scene.chickens.some(
+      c => (c.phase === "flying" && c.bounces < REQUIRED_BOUNCES) || c.phase === "queued"
     );
 
-    if (!hasActiveEarly) {
+    if (!hasActiveCatchers) {
       waveTimer -= dt;
       if (waveTimer <= 0) {
         triggerNextWave();
@@ -396,12 +391,11 @@ export function initGame() {
       }
 
       // Water surface bounce check
-      const crossed = c.vy > 0 && oldFeet <= SHELL_Y && newFeet >= SHELL_Y;
+      const crossed = c.vy > 0 && oldFeet <= SHELL_Y + 4 && newFeet >= SHELL_Y;
       if (crossed) {
         const hitFrac = Math.max(0, Math.min(1, (SHELL_Y - oldFeet) / (newFeet - oldFeet || 1)));
         const hitX = oldX + c.vx * dt * hitFrac;
         const dx = hitX - scene.turtle.x;
-
         if (Math.abs(dx) <= SHELL_HALF) {
           // Clean bounce on turtle shell
           c.x = hitX;

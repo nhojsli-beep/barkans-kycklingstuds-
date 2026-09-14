@@ -338,7 +338,7 @@ function landingIndicator(ctx, bird, turtle, time, reducedMotion) {
   const targetYPos = SHELL_TOP + 2;
 
   const dx = projX - turtle.x;
-  const shellHalf = turtle.shellHalf || 96;
+  const shellHalf = turtle.shellHalf || 105;
   const aligned = Math.abs(dx) <= shellHalf;
   const isSweet = Math.abs(dx) <= shellHalf * 0.38;
   // Closeness factor: 0 (far) to 1 (landing now)
