@@ -1,4 +1,4 @@
-import { createRenderer } from "./game-renderer.js?v=2";
+import { createRenderer } from "./game-renderer.js?v=3";
 
 const W = 1000;
 const H = 625;
@@ -8,14 +8,15 @@ const SHELL_HALF = 96;
 const FEET = 17;
 
 // Constant physics matching Tigers Kycklingstuds WR video:
-// T = 1.80s between bounces, deltaX = 210px stride
+// T = 1.80s between bounces, deltaX = 205px stride (B1: 300, B2: 505, B3: 710, Land: 890)
 const BOUNCE_TIME = 1.80;
 const GRAVITY = 780;
-const VX = 210 / BOUNCE_TIME; // 116.667 px/s
+const STRIDE = 205;
+const VX = STRIDE / BOUNCE_TIME; // 113.889 px/s
 const BOUNCE_VY = GRAVITY * (BOUNCE_TIME / 2); // 702 px/s
-const LAUNCH_VY = -24; // gentle hop off cliff (x=150, y=183) to reach B1 at t=0.90s, x=255, y=478
-const WALK_SPEED = 55; // px/s on cliff top
-const CLIFF_EDGE_X = 150;
+const LAUNCH_VY = -240; // energetic hop off cliff (x=160, y=183) to reach B1 at t=1.23s, x=300, y=478
+const WALK_SPEED = 65; // px/s on cliff top
+const CLIFF_EDGE_X = 160;
 const CLIFF_Y = 183;
 const REQUIRED_BOUNCES = 3;
 const RECORD_KEY = "barkan-kycklingstuds-record";
@@ -86,7 +87,7 @@ export function initGame() {
   const motion = matchMedia("(prefers-reduced-motion: reduce)");
   const scene = {
     mode: "ready", time: 0, score: 0, misses: 0,
-    turtle: { x: 307, impact: 0, facing: 1, vx: 0, shellHalf: SHELL_HALF },
+    turtle: { x: 300, impact: 0, facing: 1, vx: 0, shellHalf: SHELL_HALF },
     chickens: [], effects: [], lost: [], shake: 0,
     combo: 0, maxCombo: 0, perfectBounces: 0,
     wave: 1, level: 1,
@@ -187,7 +188,7 @@ export function initGame() {
     scene.time = scene.score = scene.misses = 0;
     scene.combo = scene.maxCombo = scene.perfectBounces = 0;
     scene.chickens.length = scene.effects.length = scene.lost.length = 0;
-    scene.turtle.x = 307;
+    scene.turtle.x = 300;
     scene.turtle.impact = scene.shake = scene.turtle.vx = 0;
     scene.turtle.facing = 1;
     scene.turtle.shellHalf = SHELL_HALF;
@@ -257,17 +258,17 @@ export function initGame() {
 
     // Wave size scaling:
     let size = 1;
-    if (scene.score < 5) size = 1;
-    else if (scene.score < 12) size = (waveCount % 2 === 0 ? 2 : 1);
-    else if (scene.score < 25) size = 2;
-    else size = (Math.random() < 0.4 ? 3 : 2);
+    if (scene.score < 2) size = 1;
+    else if (scene.score < 6) size = 2;
+    else if (scene.score < 14) size = Math.random() < 0.4 ? 2 : 3;
+    else if (scene.score < 30) size = 3;
+    else size = Math.floor(Math.random() * 2) + 3; // 3 or 4
 
     // Spacing between chickens within wave (time between consecutive jumps):
-    // 0.90s creates the perfect alternating double-tap cadence without collisions
-    currentWaveSpacing = 0.90;
+    currentWaveSpacing = 1.20;
 
-    // Queue chickens walking out from far left of cliff across the open plateau
-    const leadStartX = -20;
+    // Queue chickens walking in line across the open cliff:
+    const leadStartX = 40;
     const spacingPx = WALK_SPEED * currentWaveSpacing;
 
     for (let i = 0; i < size; i++) {
@@ -290,12 +291,12 @@ export function initGame() {
       });
     }
 
-    // Next wave will only trigger after this wave has completely finished its catches.
-    waveTimer = 1.4;
+    // Pause before the subsequent wave starts:
+    waveTimer = 2.4;
   }
 
   function moveTurtle(x) {
-    const next = clamp(x, 235, 785);
+    const next = clamp(x, 260, 750);
     const dx = next - scene.turtle.x;
     if (Math.abs(dx) > 0.5) scene.turtle.facing = dx > 0 ? 1 : -1;
     scene.turtle.vx = dx / STEP;
@@ -317,12 +318,13 @@ export function initGame() {
     else scene.turtle.vx *= 0.8;
 
     // Wave spawning logic:
-    // Only spawn a new wave when all active flying catches AND queued cliff walks are finished!
-    const hasActiveCatchers = scene.chickens.some(
-      c => (c.phase === "flying" && c.bounces < REQUIRED_BOUNCES) || c.phase === "queued"
+    // Next wave begins once the current wave has finished its early catches (B1 & B2)
+    // and no chickens are still walking on the cliff!
+    const hasActiveEarly = scene.chickens.some(
+      c => (c.phase === "flying" && c.bounces < 2) || c.phase === "queued"
     );
 
-    if (!hasActiveCatchers) {
+    if (!hasActiveEarly) {
       waveTimer -= dt;
       if (waveTimer <= 0) {
         triggerNextWave();
@@ -367,7 +369,7 @@ export function initGame() {
       const newFeet = c.y + FEET;
 
       // Check landing on party platform (after required bounces)
-      if (c.bounces >= REQUIRED_BOUNCES && c.x >= 870 && c.vy > 0 && newFeet >= 355) {
+      if (c.bounces >= REQUIRED_BOUNCES && c.x >= 870 && c.vy > 0 && newFeet >= 345) {
         c.phase = "landed";
         c.y = 338;
         c.rotation = 0;

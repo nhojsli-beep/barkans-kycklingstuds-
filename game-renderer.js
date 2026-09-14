@@ -132,7 +132,7 @@ function cliffs(ctx) {
 }
 
 function party(ctx, portrait) {
-  birch(ctx, 980, 347, 0.74);
+  birch(ctx, 986, 347, 0.72);
   line(ctx, 883, 235, 883, 345, COLOR.mossDark, 3);
   line(ctx, 995, 223, 995, 349, COLOR.mossDark, 3);
   shape(ctx, 'M883 240 Q939 260 995 228', null, COLOR.mossDark, 1.5);
@@ -143,18 +143,18 @@ function party(ctx, portrait) {
     ctx.fillStyle = flags[i];
     ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + 14, y); ctx.lineTo(x + 8, y + 18); ctx.closePath(); ctx.fill();
   }
-  if (portrait) ctx.drawImage(portrait, 926, 260, 77, 84);
-  // Little picnic table and a proper strawberry birthday cake.
-  line(ctx, 887, 330, 887, 347, COLOR.mossDark, 3);
-  line(ctx, 917, 330, 917, 347, COLOR.mossDark, 3);
-  shape(ctx, 'M879 326 L925 326 925 332 879 332Z', COLOR.cream, COLOR.mossDark, 2);
-  shape(ctx, 'M884 309 L919 309 919 325 884 325Z', COLOR.pink, COLOR.ink, 1.5);
-  shape(ctx, 'M884 310 Q889 302 895 309 Q901 303 907 309 Q913 303 919 309 L919 315 Q914 319 910 314 Q905 320 900 314 Q894 320 889 314 L884 316Z', COLOR.cream);
-  ellipse(ctx, 891, 306, 3, 4, COLOR.coral);
-  ellipse(ctx, 913, 306, 3, 4, COLOR.coral);
-  label(ctx, '40', 895, 303, 12, COLOR.coral);
-  ellipse(ctx, 899, 291, 1.5, 3, COLOR.yellow);
-  ellipse(ctx, 907, 291, 1.5, 3, COLOR.yellow);
+  if (portrait) ctx.drawImage(portrait, 928, 255, 72, 80);
+  // Öppen landningsbana på gräset (x=870-925), bordet och tårtan flyttade till x=928-974:
+  line(ctx, 936, 330, 936, 347, COLOR.mossDark, 3);
+  line(ctx, 966, 330, 966, 347, COLOR.mossDark, 3);
+  shape(ctx, 'M928 326 L974 326 974 332 928 332Z', COLOR.cream, COLOR.mossDark, 2);
+  shape(ctx, 'M933 309 L968 309 968 325 933 325Z', COLOR.pink, COLOR.ink, 1.5);
+  shape(ctx, 'M933 310 Q938 302 944 309 Q950 303 956 309 Q962 303 968 309 L968 315 Q963 319 959 314 Q954 320 949 314 Q943 320 938 314 L933 316Z', COLOR.cream);
+  ellipse(ctx, 940, 306, 3, 4, COLOR.coral);
+  ellipse(ctx, 962, 306, 3, 4, COLOR.coral);
+  label(ctx, '40', 944, 303, 12, COLOR.coral);
+  ellipse(ctx, 948, 291, 1.5, 3, COLOR.yellow);
+  ellipse(ctx, 956, 291, 1.5, 3, COLOR.yellow);
 }
 
 function scenery(ctx, portrait) {
@@ -332,13 +332,13 @@ function landingIndicator(ctx, bird, turtle, time, reducedMotion) {
   const t = (-bird.vy + Math.sqrt(disc)) / g;
   if (t > 1.6) return;
 
-  const vx = bird.vx || 116.667;
+  const vx = bird.vx || 113.889;
   const projX = bird.x + vx * t;
-  if (projX >= 865) return;
+  if (projX >= 870) return;
   const targetYPos = SHELL_TOP + 2;
 
   const dx = projX - turtle.x;
-  const shellHalf = turtle.shellHalf || 92;
+  const shellHalf = turtle.shellHalf || 96;
   const aligned = Math.abs(dx) <= shellHalf;
   const isSweet = Math.abs(dx) <= shellHalf * 0.38;
   // Closeness factor: 0 (far) to 1 (landing now)
