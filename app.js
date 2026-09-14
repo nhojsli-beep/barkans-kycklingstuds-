@@ -1,4 +1,4 @@
-import { initGame } from "./game.js?v=5";
+import { initGame } from "./game.js?v=6";
 import { initStory } from "./story.js";
 
 initGame();

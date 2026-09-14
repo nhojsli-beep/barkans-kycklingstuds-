@@ -1,4 +1,4 @@
-import { createRenderer } from "./game-renderer.js?v=5";
+import { createRenderer } from "./game-renderer.js?v=6";
 
 const W = 1000;
 const H = 625;
@@ -300,8 +300,12 @@ export function initGame() {
       });
     }
 
-    // Nästa klunga triggas när denna klunga har passerat Studs 1
-    waveTimer = 2.0;
+    // Nästa våg-intervall skalas med poäng så att flera vågor är igång samtidigt:
+    if (scene.score < 3) waveTimer = 2.8;
+    else if (scene.score < 8) waveTimer = 2.2;
+    else if (scene.score < 18) waveTimer = 1.7;
+    else if (scene.score < 35) waveTimer = 1.4;
+    else waveTimer = 1.1;
   }
   function moveTurtle(x) {
     const next = clamp(x, 260, 750);
@@ -325,15 +329,24 @@ export function initGame() {
     if (dir) moveTurtle(scene.turtle.x + dir * 1400 * dt);
     else scene.turtle.vx *= 0.8;
 
-    // Våg-logik: En ny våg startar FÖRST när föregående vågs kycklingar klarat alla 3 studsar
-    const hasActiveCatchers = scene.chickens.some(
-      c => (c.phase === "flying" && c.bounces < REQUIRED_BOUNCES) || c.phase === "queued"
-    );
+    // Kontinuerlig våg-logik: Nya vågor startar löpande så flera vågor är i luften samtidigt!
+    const hasQueuedOnCliff = scene.chickens.some(c => c.phase === "queued");
 
-    if (!hasActiveCatchers) {
+    if (!hasQueuedOnCliff) {
       waveTimer -= dt;
       if (waveTimer <= 0) {
-        triggerNextWave();
+        const nextB1Time = scene.time + ((CLIFF_EDGE_X - (waveCount === 0 ? 120 : 50)) / WALK_SPEED) + 1.23;
+        const clash = scene.chickens.some(c => {
+          if (c.phase !== "flying" || c.bounces >= REQUIRED_BOUNCES) return false;
+          const tBounce = c.nextBounceTime || (scene.time + 0.9);
+          return Math.abs(nextB1Time - tBounce) < 0.40;
+        });
+
+        if (clash) {
+          waveTimer = 0.35;
+        } else {
+          triggerNextWave();
+        }
       }
     }
 
@@ -353,6 +366,7 @@ export function initGame() {
           c.vy = LAUNCH_VY;
           c.g = GRAVITY;
           c.bounces = 0;
+          c.nextBounceTime = scene.time + 1.23;
         }
         continue;
       }
@@ -413,6 +427,7 @@ export function initGame() {
           c.y = SHELL_Y - FEET;
           c.vy = -BOUNCE_VY;
           c.bounces++;
+          c.nextBounceTime = scene.time + BOUNCE_TIME;
           bounces++;
           scene.combo++;
           if (scene.combo > scene.maxCombo) scene.maxCombo = scene.combo;
