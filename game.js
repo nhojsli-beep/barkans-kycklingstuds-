@@ -1,4 +1,4 @@
-import { createRenderer } from "./game-renderer.js";
+import { createRenderer } from "./game-renderer.js?v=2";
 
 const W = 1000;
 const H = 625;
