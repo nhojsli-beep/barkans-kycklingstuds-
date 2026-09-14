@@ -1,4 +1,4 @@
-import { createRenderer } from "./game-renderer.js?v=4";
+import { createRenderer } from "./game-renderer.js?v=5";
 
 const W = 1000;
 const H = 625;
@@ -15,7 +15,7 @@ const STRIDE = 205;
 const VX = STRIDE / BOUNCE_TIME; // 113.889 px/s
 const BOUNCE_VY = GRAVITY * (BOUNCE_TIME / 2); // 702 px/s
 const LAUNCH_VY = -240; // energetic hop off cliff (x=160, y=183) to reach B1 at t=1.23s, x=300, y=478
-const WALK_SPEED = 65; // px/s on cliff top
+const WALK_SPEED = 75; // px/s on cliff top
 const CLIFF_EDGE_X = 160;
 const CLIFF_Y = 183;
 const REQUIRED_BOUNCES = 3;
@@ -255,43 +255,54 @@ export function initGame() {
     scene.wave = waveCount;
     scene.level = Math.floor((waveCount - 1) / 3) + 1;
 
-    // Snabb svårighetsökning med fler kycklingar direkt från start:
-    let size = 1;
-    if (scene.score < 1) size = 1;      // Våg 1: 1 kyckling (snabbstart)
-    else if (scene.score < 4) size = 2; // Våg 2-3: 2 kycklingar
-    else if (scene.score < 8) size = Math.random() < 0.35 ? 2 : 3; // Våg 4+: 2-3 kycklingar
-    else size = 3;                      // Våg 6+: 3 kycklingar
+    // Klungstorlek (hur många kycklingar som hoppar samtidigt i flocken):
+    // Våg 1 kan ha 1-2 st, Våg 2 kan ha 4 st, Våg 3 kan ha 2 st, osv.
+    let clusterSize = 2;
+    if (waveCount === 1) {
+      clusterSize = scene.score < 1 ? (Math.random() < 0.5 ? 1 : 2) : 2;
+    } else if (scene.score < 5) {
+      const roll = Math.random();
+      clusterSize = roll < 0.45 ? 2 : roll < 0.80 ? 3 : 4;
+    } else {
+      const roll = Math.random();
+      clusterSize = roll < 0.30 ? 2 : roll < 0.65 ? 3 : 4;
+    }
 
-    // 2.70s avstånd (1.5 * T) ger en perfekt 0.90s reaktionslucka för varje studs över sjön
-    currentWaveSpacing = 2.70;
+    // Tät formation inom klungan: 0.13s mellan varje fågel
+    // så de rör sig och studsar tillsammans på sköldpaddan som en flock!
+    const dtBurst = 0.13;
+    const spacingPx = WALK_SPEED * dtBurst; // ca 10px
 
-    // Första kycklingen startar nära kanten (x=100) i våg 1 så den hoppar på under 1 sek!
-    const leadStartX = waveCount === 1 ? 100 : 60;
-    const spacingPx = WALK_SPEED * currentWaveSpacing;
+    // Första vågen startar nära kanten (x=120) så den hoppar direkt på under 1 sek!
+    const leadStartX = waveCount === 1 ? 120 : 50;
 
-    for (let i = 0; i < size; i++) {
+    for (let i = 0; i < clusterSize; i++) {
       const startX = leadStartX - i * spacingPx;
+      const yOffset = i === 0 ? 0 : (i % 2 === 1 ? -4 : 4);
       let type = "normal";
       if (scene.level >= 2 && Math.random() < 0.18) type = "gold";
 
       scene.chickens.push({
         id: ++released,
         phase: "queued",
+        clusterId: waveCount,
+        clusterIndex: i,
         x: startX,
-        y: CLIFF_Y,
+        y: CLIFF_Y + yOffset,
+        baseY: CLIFF_Y + yOffset,
         vx: 0,
         vy: 0,
         bounces: 0,
-        age: i * 0.4,
+        age: i * 0.25,
         rotation: 0,
         g: GRAVITY,
         type,
       });
     }
 
-    waveTimer = 1.2;
+    // Nästa klunga triggas när denna klunga har passerat Studs 1
+    waveTimer = 2.0;
   }
-
   function moveTurtle(x) {
     const next = clamp(x, 260, 750);
     const dx = next - scene.turtle.x;
@@ -337,7 +348,7 @@ export function initGame() {
         if (c.x >= CLIFF_EDGE_X) {
           c.phase = "flying";
           c.x = CLIFF_EDGE_X;
-          c.y = CLIFF_Y;
+          c.y = c.baseY || CLIFF_Y;
           c.vx = VX;
           c.vy = LAUNCH_VY;
           c.g = GRAVITY;
