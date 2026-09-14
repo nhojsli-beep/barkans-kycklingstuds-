@@ -336,33 +336,31 @@ function bannerPlane(ctx, time, reducedMotion) {
   ctx.restore();
 }
 
-function landingIndicator(ctx, bird, turtle, time, reducedMotion, pace = 1) {
+function landingIndicator(ctx, bird, turtle, time, reducedMotion) {
   if (bird.phase !== 'flying' || bird.vy <= 0 || (bird.bounces || 0) >= 3) return;
   const feetY = bird.y + 17;
   const dy = SHELL_TOP - feetY;
   if (dy <= 0 || dy > 340) return;
 
-  const g = 620 * (bird.gravMult || 1);
+  const g = bird.g || 780;
   const disc = bird.vy * bird.vy + 2 * g * dy;
   if (disc < 0) return;
   const t = (-bird.vy + Math.sqrt(disc)) / g;
-  const seconds = t / (pace || bird.pace || 1);
-  if (seconds > 1.6) return;
+  if (t > 1.6) return;
 
-  const vx = bird.vx || 120;
+  const vx = bird.vx || 116.667;
   const projX = bird.x + vx * t;
   if (projX >= 865) return;
   const targetYPos = SHELL_TOP + 2;
 
   const dx = projX - turtle.x;
-  const aligned = Math.abs(dx) <= 88;
-  const isSweet = Math.abs(dx) <= 88 * 0.35;
-
+  const shellHalf = turtle.shellHalf || 92;
+  const aligned = Math.abs(dx) <= shellHalf;
+  const isSweet = Math.abs(dx) <= shellHalf * 0.38;
   // Closeness factor: 0 (far) to 1 (landing now)
-  const proximity = Math.max(0, Math.min(1, 1 - seconds / 1.5));
+  const proximity = Math.max(0, Math.min(1, 1 - t / 1.5));
   const radiusX = 34 - proximity * 16;
   const radiusY = 7 - proximity * 3.5;
-
   ctx.save();
   ctx.translate(projX, targetYPos);
 
@@ -614,7 +612,7 @@ export function createRenderer(canvas) {
     bannerPlane(ctx, time, scene.reducedMotion);
     water(ctx, time);
     for (const bird of scene.chickens) {
-      landingIndicator(ctx, bird, scene.turtle, time, scene.reducedMotion, scene.pace);
+      landingIndicator(ctx, bird, scene.turtle, time, scene.reducedMotion);
     }
     turtle(ctx, scene.turtle, time, scene.reducedMotion);
     if (scene.mode === 'ready' && !scene.chickens.length) {
@@ -622,7 +620,10 @@ export function createRenderer(canvas) {
       chicken(ctx, { x: 95, y: 183, age: 1, rotation: 0, phase: 'queued' }, time, scene.reducedMotion);
       chicken(ctx, { x: 62, y: 183, age: 2, rotation: 0, phase: 'queued' }, time, scene.reducedMotion);
     }
-    for (const bird of scene.chickens) chicken(ctx, bird, time, scene.reducedMotion);
+    for (const bird of scene.chickens) {
+      if (bird.phase === 'queued' && bird.x < 25) continue;
+      chicken(ctx, bird, time, scene.reducedMotion);
+    }
     for (let i = 0; i < scene.lost.length && i < 3; i++) swimmingChick(ctx, scene.lost[i], i, time, scene.reducedMotion);
     for (const item of scene.effects) effect(ctx, item, scene.reducedMotion);
     ctx.restore();
