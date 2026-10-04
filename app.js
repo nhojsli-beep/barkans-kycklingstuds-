@@ -1,4 +1,4 @@
-import { initGame } from "./game.js?v=6";
+import { initGame } from "./game.js?v=7";
 import { initStory } from "./story.js";
 
 initGame();
@@ -22,16 +22,46 @@ let soundEnabled = false;
 let audio;
 let masterGain;
 let splashBuffer;
+function soundUnavailable() {
+  soundEnabled = false;
+  if (soundButton) {
+    soundButton.disabled = true;
+    soundButton.setAttribute("aria-pressed", "false");
+    soundButton.setAttribute("aria-label", "Ljud saknas");
+  }
+  const label = document.querySelector("#sound-label");
+  if (label) label.textContent = "LJUD SAKNAS";
+  const gameSound = document.querySelector("[data-game-sound]");
+  if (gameSound) {
+    gameSound.disabled = true;
+    gameSound.setAttribute("aria-pressed", "false");
+    gameSound.setAttribute("aria-label", "Ljud saknas");
+    gameSound.textContent = "Ljud saknas";
+  }
+}
 function enableAudio() {
   const AudioContext = window.AudioContext || window.webkitAudioContext;
-  if (!AudioContext) return;
-  audio ||= new AudioContext();
+  if (!AudioContext) {
+    soundUnavailable();
+    return false;
+  }
+  try {
+    audio ||= new AudioContext();
+  } catch {
+    soundUnavailable();
+    return false;
+  }
   if (!masterGain) {
     masterGain = audio.createGain();
-    masterGain.gain.value = 0.55;
+    masterGain.gain.value = 0.35;
     masterGain.connect(audio.destination);
   }
-  if (audio.state === "suspended") audio.resume().catch(() => {});
+  if (audio.state === "suspended") {
+    audio.resume().catch(() => {
+      soundUnavailable();
+    });
+  }
+  return true;
 }
 function tone(frequency, endFrequency, duration, delay = 0, volume = 0.05, type = "triangle", peak) {
   if (!soundEnabled || !audio || audio.state !== "running") return;
@@ -62,7 +92,7 @@ function blip(frequency = 330) {
 function splash() {
   if (!soundEnabled || !audio || audio.state !== "running") return;
   if (!splashBuffer) {
-    splashBuffer = audio.createBuffer(1, Math.ceil(audio.sampleRate * 0.3), audio.sampleRate);
+    splashBuffer = audio.createBuffer(1, Math.ceil(audio.sampleRate * 0.25), audio.sampleRate);
     const samples = splashBuffer.getChannelData(0);
     for (let index = 0; index < samples.length; index++) {
       samples[index] = Math.random() * 2 - 1;
@@ -75,24 +105,24 @@ function splash() {
   noise.buffer = splashBuffer;
   filter.type = "lowpass";
   filter.frequency.setValueAtTime(1800, start);
-  filter.frequency.exponentialRampToValueAtTime(180, start + 0.28);
+  filter.frequency.exponentialRampToValueAtTime(180, start + 0.25);
   gain.gain.setValueAtTime(0, start);
   gain.gain.linearRampToValueAtTime(0.11, start + 0.012);
-  gain.gain.exponentialRampToValueAtTime(0.001, start + 0.28);
+  gain.gain.exponentialRampToValueAtTime(0.001, start + 0.25);
   noise.connect(filter).connect(gain).connect(masterGain);
   noise.start(start);
-  noise.stop(start + 0.3);
+  noise.stop(start + 0.25);
   noise.onended = () => {
     noise.disconnect();
     filter.disconnect();
     gain.disconnect();
   };
-  tone(150, 55, 0.24, 0, 0.055, "sine");
+  tone(150, 55, 0.20, 0, 0.055, "sine");
 }
 function gameSound(kind) {
   switch (kind) {
     case "bounce":
-      tone(240, 190, 0.22, 0, 0.07, "triangle", 620);
+      tone(240, 190, 0.14, 0, 0.07, "triangle", 620);
       break;
     case "bounce-perfect":
       tone(587, 880, 0.14, 0, 0.07, "sine", 1174);
@@ -124,6 +154,13 @@ function gameSound(kind) {
       tone(294, 247, 0.18, 0.18, 0.05);
       tone(196, 98, 0.38, 0.36, 0.045);
       break;
+    case "countdown":
+      tone(440, 440, 0.065, 0, 0.025, "sine");
+      break;
+    case "wave":
+      tone(330, 440, 0.09, 0, 0.03);
+      tone(440, 660, 0.14, 0.09, 0.03);
+      break;
   }
 }
 function resumeAudio() {
@@ -134,18 +171,24 @@ function resumeAudio() {
 document.addEventListener("pointerdown", resumeAudio, { passive: true });
 document.addEventListener("keydown", resumeAudio);
 soundButton.addEventListener("click", () => {
-  soundEnabled = !soundEnabled;
-  if (soundEnabled) enableAudio();
+  if (soundButton.disabled) return;
+  if (!soundEnabled) {
+    const ok = enableAudio();
+    if (!ok) return;
+    soundEnabled = true;
+  } else {
+    soundEnabled = false;
+  }
   if (masterGain) {
     masterGain.gain.cancelScheduledValues(audio.currentTime);
-    masterGain.gain.setTargetAtTime(soundEnabled ? 0.55 : 0, audio.currentTime, 0.01);
+    masterGain.gain.setTargetAtTime(soundEnabled ? 0.35 : 0, audio.currentTime, 0.01);
   }
   soundButton.setAttribute("aria-pressed", String(soundEnabled));
   document.querySelector("#sound-label").textContent = soundEnabled
     ? "LJUD PÅ"
     : "LJUD AV";
   if (soundEnabled && audio) {
-    audio.resume().then(() => blip(440)).catch(() => {});
+    audio.resume().then(() => blip(440)).catch(() => soundUnavailable());
   }
 });
 character.addEventListener("click", () => {

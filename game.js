@@ -1,616 +1,472 @@
-import { createRenderer } from "./game-renderer.js?v=6";
+import { W, H, STEP, RULES, createGameState, beginRound, stepGame, setPaused } from "./game-core.js?v=7";
+import { createRenderer } from "./game-renderer.js?v=7";
 
-const W = 1000;
-const H = 625;
-const STEP = 1 / 120;
-const SHELL_Y = 495;
-const SHELL_HALF = 105;
-const FEET = 17;
-
-// Constant physics matching Tigers Kycklingstuds WR video:
-// T = 1.80s between bounces, deltaX = 205px stride (B1: 300, B2: 505, B3: 710, Land: 890)
-const BOUNCE_TIME = 1.80;
-const GRAVITY = 780;
-const STRIDE = 205;
-const VX = STRIDE / BOUNCE_TIME; // 113.889 px/s
-const BOUNCE_VY = GRAVITY * (BOUNCE_TIME / 2); // 702 px/s
-const LAUNCH_VY = -240; // energetic hop off cliff (x=160, y=183) to reach B1 at t=1.23s, x=300, y=478
-const WALK_SPEED = 75; // px/s on cliff top
-const CLIFF_EDGE_X = 160;
-const CLIFF_Y = 183;
-const REQUIRED_BOUNCES = 3;
 const RECORD_KEY = "barkan-kycklingstuds-record";
-const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
+const DIRECTIONS = new Map([["ArrowLeft", -1], ["KeyA", -1], ["ArrowRight", 1], ["KeyD", 1]]);
+const activeMode = mode => mode === "countdown" || mode === "running" || mode === "practice";
+const label = (full, short) => `<span class="bounce-label-full">${full}</span><span class="bounce-label-short" aria-hidden="true">${short}</span>`;
 
 export function initGame() {
   const root = document.querySelector("#game-root");
   if (!root) return () => {};
   root.innerHTML = `
-    <section class="bounce-game" aria-labelledby="bounce-title">
+    <section class="bounce-game" role="region" aria-labelledby="bounce-title">
       <div class="bounce-top">
         <div class="bounce-brand"><p class="eyebrow">TRANÅS ARCADE CLUB / SEDAN NYSS</p><h3 id="bounce-title">BÄRKANS KYCKLINGSTUDS</h3></div>
         <div class="bounce-actions">
           <button type="button" class="button sound-game" data-game-sound aria-pressed="false" aria-label="Slå på spelljud">Ljud av</button>
-          <button type="button" class="button pause-game" disabled>Pausa</button>
-          <button type="button" class="button expand-game" aria-pressed="false" aria-label="Förstora spelet">Förstora ↗</button>
+          <button type="button" class="button pause-game" aria-label="Pausa spelet" disabled>Pausa</button>
+          <button type="button" class="button expand-game" aria-pressed="false" aria-label="Förstora spelet">${label("Förstora ↗", "Större ↗")}</button>
         </div>
       </div>
       <div class="bounce-hud" aria-label="Spelstatistik">
-        <div><span>PÅ KALASET</span><strong data-score>0</strong></div>
-        <div><span>LIV KVAR</span><strong data-lives aria-label="3 av 3 liv"><i></i><i></i><i></i></strong></div>
-        <div><span>KOMBO</span><strong data-combo>—</strong></div>
+        <div><span>POÄNG</span><strong data-score>0</strong></div>
+        <div><span>LIV</span><strong data-lives aria-label="3 av 3 liv"><i></i><i></i><i></i></strong></div>
+        <div><span>RÄDDADE</span><strong data-saved>0</strong></div>
         <div><span>PERSONBÄSTA</span><strong data-best>0</strong></div>
-        <div><span>VÅG</span><strong data-tempo>1</strong></div>
       </div>
-      <div class="bounce-viewport">
-        <canvas width="1000" height="625" tabindex="0" aria-label="Styr sköldpaddan och få varje kyckling att studsa tre gånger över vattnet. Kycklingarna kommer i överlappande rytmer. Tre missar avslutar rundan." aria-describedby="bounce-instructions"></canvas>
-        <div class="bounce-overlay"><div class="bounce-panel">
-          <p class="eyebrow" data-overlay-kicker>ETT KALAS. INGEN BRO. DIN TUR.</p>
-          <h4 data-overlay-title>ALLA SKA MED.<br>INGEN KAN SIMMA.</h4>
-          <p data-overlay-copy>Kycklingarna kommer i överlappande rytmer med gradvis fler gäster. Få varje kyckling att studsa tre gånger på skalet innan den når kalaset. Sikta på landningsmarkörerna och träffa mitt på skalet för Perfekt Studs. Guldgäster och kombo ger bonuspoäng. Tre plask = slut.</p>
-          <div class="bounce-result" hidden>
-            <div><span>RÄDDADE</span><strong data-result-score>0</strong></div>
-            <div><span>STUDSAR</span><strong data-result-bounces>0</strong></div>
-            <div><span>BÄSTA KOMBO</span><strong data-result-combo>0</strong></div>
-            <div><span>PERFEKTA</span><strong data-result-perfect>0</strong></div>
+      <div class="bounce-hud-secondary"><span>VÅG <strong data-wave>1</strong></span><span><strong data-combo>0</strong> I RAD · <strong data-multiplier>×1</strong></span></div>
+      <div class="bounce-stage-area"><div class="bounce-viewport">
+        <canvas width="${W}" height="${H}" tabindex="0" aria-label="Flytta sköldpaddan. Fånga varje kyckling tre gånger på skalet innan den når kalaset. Träff mitt på skalet ger perfekt studs. Tre plask avslutar en arkadrunda." aria-describedby="bounce-instructions"></canvas>
+        <div class="bounce-countdown" aria-hidden="true" hidden>3</div>
+        <div class="bounce-practice-status" hidden><strong data-practice-progress>ÖVNING · 0/${RULES.requiredBounces}</strong><span data-feedback>Följ landningsmarkören.</span></div>
+        <div class="bounce-overlay"><div class="bounce-panel" aria-labelledby="bounce-panel-title">
+          <div class="bounce-panel-content">
+            <img class="bounce-panel-portrait" src="./barkan.svg" alt="" width="84" height="96">
+            <p class="eyebrow" data-overlay-kicker>ETT KALAS. INGEN BRO. DIN TUR.</p>
+            <h4 id="bounce-panel-title" data-overlay-title>ALLA SKA TILL KALASET.</h4>
+            <p data-overlay-copy hidden></p>
+            <ol class="bounce-steps"><li>Flytta sköldpaddan.</li><li>Fånga varje kyckling tre gånger.</li><li>Tre plask avslutar rundan.</li></ol>
+            <div class="bounce-result" hidden>
+              <div><span>POÄNG</span><strong data-result-score>0</strong></div>
+              <div><span>RÄDDADE</span><strong data-result-saved>0</strong></div>
+              <div><span>BÄSTA SVIT</span><strong data-result-combo>0</strong></div>
+              <div><span>PERFEKTA STUDSAR</span><strong data-result-perfect>0</strong></div>
+              <div class="bounce-result-total"><span>TOTALA STUDSAR</span><strong data-result-bounces>0</strong></div>
+            </div>
           </div>
-          <button type="button" class="button primary" data-play>SLÄPP KYCKLINGARNA ↗</button>
+          <div class="bounce-panel-actions">
+            <button type="button" class="button primary" data-play aria-label="Starta kalaset">${label("STARTA KALASET", "STARTA")}</button>
+            <button type="button" class="button" data-practice aria-label="Öva studsen">${label("ÖVA STUDSEN", "ÖVA")}</button>
+            <button type="button" class="button primary" data-resume aria-label="Fortsätt kalaset" hidden>${label("FORTSÄTT KALASET ↗", "FORTSÄTT")}</button>
+            <button type="button" class="button" data-menu hidden>TILL MENYN</button>
+          </div>
         </div></div>
+      </div></div>
+      <div class="bounce-bottom">
+        <p id="bounce-instructions"><strong>TRE STUDSAR ÖVER SOMMEN.</strong><br>Mus / dra med fingret / ← → eller A D · P / mellanslag = paus.<br><span>Vänd mobilen för större spelplan.</span></p>
+        <div class="bounce-practice-actions" hidden><button type="button" class="button primary" data-start-arcade>BÖRJA KALASET</button><button type="button" class="button" data-menu>TILL MENYN</button></div>
+        <div class="bounce-arrows" aria-label="Flytta sköldpaddan"><button type="button" data-direction="-1" aria-label="Flytta vänster" disabled>←</button><button type="button" data-direction="1" aria-label="Flytta höger" disabled>→</button></div>
       </div>
-
-      <div class="bounce-bottom"><p id="bounce-instructions"><strong>FLYTTA. FÅNGA. PRIORITERA.</strong><br>Mus / dra med fingret / ← → eller A D · P / mellanslag = paus<br>Följ muspekaren direkt för precis sköldpaddsstyrning.</p><div class="bounce-arrows" aria-label="Flytta sköldpaddan"><button type="button" data-direction="-1" aria-label="Flytta vänster">←</button><button type="button" data-direction="1" aria-label="Flytta höger">→</button></div></div>
+      <p class="bounce-live" role="status" aria-live="polite" aria-atomic="true"></p>
     </section>`;
 
-  const canvas = root.querySelector("canvas");
-  if (!canvas.getContext("2d")) {
-    root.querySelector("[data-overlay-copy]").textContent = "Spelet behöver Canvas 2D. Prova en aktuell version av Chrome, Firefox eller Safari.";
-    root.querySelector("[data-play]").disabled = true;
-    return () => {};
-  }
-  const renderer = createRenderer(canvas);
   const game = root.querySelector(".bounce-game");
-  const viewport = root.querySelector(".bounce-viewport");
+  const canvas = root.querySelector("canvas");
   const overlay = root.querySelector(".bounce-overlay");
   const play = root.querySelector("[data-play]");
+  const practice = root.querySelector("[data-practice]");
+  const resume = root.querySelector("[data-resume]");
   const pause = root.querySelector(".pause-game");
   const expand = root.querySelector(".expand-game");
-  const scoreNode = root.querySelector("[data-score]");
-  const livesNode = root.querySelector("[data-lives]");
-  const lifePips = [...livesNode.children];
-  const comboNode = root.querySelector("[data-combo]");
-  const bestNode = root.querySelector("[data-best]");
-  const tempoNode = root.querySelector("[data-tempo]");
-
-  const result = root.querySelector(".bounce-result");
   const sound = root.querySelector("[data-game-sound]");
-  const masterSound = document.querySelector("#sound");
+  const result = root.querySelector(".bounce-result");
+  const steps = root.querySelector(".bounce-steps");
+  const copy = root.querySelector("[data-overlay-copy]");
+  const portrait = root.querySelector(".bounce-panel-portrait");
+  const countdown = root.querySelector(".bounce-countdown");
+  const practiceActions = root.querySelector(".bounce-practice-actions");
+  const practiceStatus = root.querySelector(".bounce-practice-status");
+  const live = root.querySelector(".bounce-live");
+  const arrowButtons = [...root.querySelectorAll("[data-direction]")];
+  const lifePips = [...root.querySelector("[data-lives]").children];
+  const nodes = Object.fromEntries(["score", "saved", "best", "wave", "combo", "multiplier"].map(key => [key, root.querySelector(`[data-${key}]`)]));
   const motion = matchMedia("(prefers-reduced-motion: reduce)");
-  const scene = {
-    mode: "ready", time: 0, score: 0, misses: 0,
-    turtle: { x: 300, impact: 0, facing: 1, vx: 0, shellHalf: SHELL_HALF },
-    chickens: [], effects: [], lost: [], shake: 0,
-    combo: 0, maxCombo: 0, perfectBounces: 0,
-    wave: 1, level: 1,
-    reducedMotion: motion.matches,
-  };
+  const masterSound = document.querySelector("#sound");
+  const cleanup = [];
+  let scene = createGameState();
+  scene.reducedMotion = motion.matches;
   let best = 0;
   try {
     const saved = Number(localStorage.getItem(RECORD_KEY));
     if (Number.isFinite(saved) && saved > 0) best = Math.floor(saved);
   } catch {}
-
-  let frame = 0;
-  let last = 0;
-  let accumulator = 0;
-  let released = 0;
-  let waveCount = 0;
-  let waveTimer = 0.5;
-  let currentWaveSpacing = 1.25;
-
-  const hudState = { score: -1, best: -1, misses: -1, combo: "", wave: -1, mode: "" };
-  let bounces = 0;
-  let endAge = 0;
-  let inputMode = "keyboard";
-  let expanded = false;
-  let previousOverflow = "";
+  const input = { direction: 0, targetX: null };
   const heldKeys = new Set();
   const heldPointers = new Map();
-  const cleanup = [];
+  const hudState = {};
+  let activePointer = null;
+  let frame = 0;
+  let last = 0;
+  let expanded = false;
+  let previousOverflow = "";
+  let previousFocus = null;
+  let disposed = false;
+  let portraitAvailable = true;
+  const canvasAvailable = !!canvas.getContext("2d");
+  const renderer = canvasAvailable ? createRenderer(canvas) : null;
 
   function listen(target, type, handler, options) {
     target.addEventListener(type, handler, options);
     cleanup.push(() => target.removeEventListener(type, handler, options));
   }
-
   function signal(kind) {
     root.dispatchEvent(new CustomEvent("barkan-game-sound", { detail: kind }));
   }
-
-  function stats() {
-    if (hudState.score !== scene.score) {
-      hudState.score = scene.score;
-      scoreNode.textContent = scene.score;
+  function announce(message) { live.textContent = message; }
+  function release() {
+    heldKeys.clear();
+    const pointer = activePointer;
+    activePointer = null;
+    if (pointer !== null && canvas.hasPointerCapture(pointer)) canvas.releasePointerCapture(pointer);
+    for (const [id, entry] of heldPointers) {
+      if (entry.button.hasPointerCapture(id)) entry.button.releasePointerCapture(id);
     }
-    if (hudState.best !== best) {
-      hudState.best = best;
-      bestNode.textContent = best;
+    heldPointers.clear();
+    input.direction = 0;
+    input.targetX = null;
+  }
+  function updateDirection() {
+    let left = false;
+    let right = false;
+    for (const key of heldKeys) {
+      left ||= DIRECTIONS.get(key) === -1;
+      right ||= DIRECTIONS.get(key) === 1;
+    }
+    for (const entry of heldPointers.values()) {
+      left ||= entry.direction === -1;
+      right ||= entry.direction === 1;
+    }
+    input.direction = Number(right) - Number(left);
+    input.targetX = null;
+  }
+  function stop() {
+    cancelAnimationFrame(frame);
+    frame = 0;
+    last = 0;
+  }
+  function needsFrame() {
+    return activeMode(scene.mode) || (scene.mode === "over" && (scene.effects.length > 0 || scene.shake > 0 || scene.turtle.impact > 0));
+  }
+  function run() {
+    if (!disposed && !frame && needsFrame()) {
+      last = performance.now();
+      frame = requestAnimationFrame(tick);
+    }
+  }
+  function showPanel(mode, record = false) {
+    overlay.hidden = false;
+    portrait.hidden = mode !== "ready" || !portraitAvailable;
+    steps.hidden = mode !== "ready";
+    result.hidden = mode !== "over";
+    copy.hidden = mode === "ready";
+    play.hidden = mode === "paused";
+    practice.hidden = mode !== "ready";
+    resume.hidden = mode !== "paused";
+    root.querySelector(".bounce-panel-actions [data-menu]").hidden = mode !== "paused" || scene.roundKind !== "practice";
+    const kicker = root.querySelector("[data-overlay-kicker]");
+    const title = root.querySelector("[data-overlay-title]");
+    if (mode === "ready") {
+      kicker.textContent = "ETT KALAS. INGEN BRO. DIN TUR.";
+      title.textContent = "ALLA SKA TILL KALASET.";
+      play.innerHTML = label("STARTA KALASET", "STARTA");
+      play.setAttribute("aria-label", "Starta kalaset");
+    } else if (mode === "paused") {
+      kicker.textContent = "FIKAPAUS";
+      title.textContent = "INGEN STRESS. ÄN.";
+      copy.textContent = "Spelet står still. Bärkan passar på att förklara varför pauser är viktiga. Länge. Fortsätt när kaffet är klart.";
+    } else {
+      kicker.textContent = record ? "NYTT REKORD. RING TRANÅS TIDNING." : "TRE PLASK. ETT LÅNGT EFTERSNACK.";
+      title.textContent = `${scene.saved} GÄSTER PÅ KALASET.`;
+      copy.textContent = scene.saved ? "Kycklingarna i Sommen fick badringar. Gästerna på land fick Bärkans livshistoria. Oklart vilka som hade mest tur." : "Ingen kom fram. Bärkan håller tal för en servett. Den har bett om notan.";
+      play.innerHTML = label("SPELA IGEN ↗", "SPELA IGEN");
+      play.setAttribute("aria-label", "Spela igen");
+      for (const [key, value] of Object.entries({ score: scene.score, saved: scene.saved, combo: scene.maxCombo, perfect: scene.perfectBounces, bounces: scene.bounces })) {
+        root.querySelector(`[data-result-${key}]`).textContent = value;
+      }
+    }
+  }
+  function stats() {
+    const values = { score: scene.score, saved: scene.saved, best, wave: scene.wave, combo: scene.combo, multiplier: `×${Math.min(3, 1 + Math.floor(Math.max(0, scene.combo - 1) / 10))}` };
+    for (const key in values) {
+      if (hudState[key] !== values[key]) {
+        if (key === "wave" && hudState.wave !== undefined && scene.wave > hudState.wave) announce(`Våg ${scene.wave}. Fler gäster är på väg!`);
+        hudState[key] = values[key];
+        nodes[key].textContent = values[key];
+      }
     }
     if (hudState.misses !== scene.misses) {
+      if (hudState.misses !== undefined && scene.misses > hudState.misses) announce(`Plask! ${3 - scene.misses} liv kvar.`);
       hudState.misses = scene.misses;
-      livesNode.setAttribute("aria-label", `${3 - scene.misses} av 3 liv`);
+      root.querySelector("[data-lives]").setAttribute("aria-label", `${3 - scene.misses} av 3 liv`);
       lifePips.forEach((pip, i) => pip.classList.toggle("lost", i >= 3 - scene.misses));
-    }
-    const combo = scene.combo > 1 ? `${scene.combo}×` : "—";
-    if (hudState.combo !== combo) {
-      hudState.combo = combo;
-      comboNode.textContent = combo;
-      comboNode.classList.toggle("is-active", scene.combo > 1);
-    }
-    if (hudState.wave !== scene.wave) {
-      hudState.wave = scene.wave;
-      tempoNode.textContent = `${scene.wave}`;
     }
     if (hudState.mode !== scene.mode) {
       hudState.mode = scene.mode;
-      root.dataset.state = scene.mode;
+      root.dataset.state = game.dataset.state = scene.mode;
+      game.dataset.roundKind = scene.roundKind;
+      pause.disabled = !canvasAvailable || (!activeMode(scene.mode) && scene.mode !== "paused");
+      pause.textContent = scene.mode === "paused" ? "Fortsätt" : "Pausa";
+      pause.setAttribute("aria-label", scene.mode === "paused" ? "Fortsätt spelet" : "Pausa spelet");
+      arrowButtons.forEach(button => { button.disabled = !activeMode(scene.mode) || !canvasAvailable; });
+      overlay.hidden = scene.mode !== "ready" && scene.mode !== "paused" && scene.mode !== "over";
+      if (scene.mode === "ready" || scene.mode === "paused") showPanel(scene.mode);
+      if (scene.mode === "over") {
+        release();
+        const record = scene.roundKind === "arcade" && scene.score > best;
+        if (record) {
+          best = scene.score;
+          nodes.best.textContent = hudState.best = best;
+          try { localStorage.setItem(RECORD_KEY, String(best)); } catch {}
+        }
+        showPanel("over", record);
+        announce(`Rundan är slut. ${scene.score} poäng. ${scene.saved} räddade gäster.${record ? " Nytt rekord!" : ""}`);
+        play.focus({ preventScroll: true });
+      }
+    }
+    countdown.hidden = scene.mode !== "countdown";
+    if (!countdown.hidden) {
+      const count = Math.max(1, Math.ceil(scene.countdownRemaining - STEP / 2));
+      if (hudState.countdown !== count) { hudState.countdown = count; countdown.textContent = count; }
+    }
+    const practicing = scene.roundKind === "practice" && scene.mode !== "ready";
+    practiceActions.hidden = !practicing;
+    practiceStatus.hidden = !practicing || scene.mode === "paused";
+    if (practicing) {
+      let progress = 0;
+      let hasActiveBird = false;
+      for (const bird of scene.chickens) {
+        if (bird.phase !== "queued" && bird.phase !== "flying") continue;
+        hasActiveBird = true;
+        progress = Math.max(progress, bird.bounces);
+      }
+      if (!hasActiveBird && scene.feedback.startsWith("BRA!")) progress = RULES.requiredBounces;
+      const text = `ÖVNING · ${progress}/${RULES.requiredBounces}`;
+      if (hudState.progress !== text) { hudState.progress = text; root.querySelector("[data-practice-progress]").textContent = text; }
+      const feedback = scene.feedback || "Följ landningsmarkören. Fånga tre studsar.";
+      if (hudState.feedback !== feedback) {
+        hudState.feedback = feedback;
+        root.querySelector("[data-feedback]").textContent = feedback;
+        if (scene.feedback) announce(scene.feedback);
+      }
     }
   }
-
-  function showPanel(kicker, title, copy, action) {
-    root.querySelector("[data-overlay-kicker]").textContent = kicker;
-    root.querySelector("[data-overlay-title]").textContent = title;
-    root.querySelector("[data-overlay-copy]").textContent = copy;
-    play.textContent = action;
-    overlay.hidden = false;
-  }
-
-  function release() {
-    heldKeys.clear();
-    heldPointers.clear();
-  }
-
-  function run() {
-    cancelAnimationFrame(frame);
-    scene.mode = "running";
-    overlay.hidden = true;
-    result.hidden = true;
-    pause.disabled = false;
-    pause.textContent = "Pausa";
-    accumulator = 0;
-    last = performance.now();
+  function tick(now) {
+    frame = 0;
+    if (disposed || !needsFrame()) return;
+    const dt = Math.min(0.1, Math.max(0, (now - last) / 1000));
+    last = now;
+    stepGame(scene, dt, input, signal);
     stats();
-    canvas.focus({ preventScroll: true });
-    frame = requestAnimationFrame(tick);
+    renderer.draw(scene);
+    if (needsFrame()) frame = requestAnimationFrame(tick);
   }
-
-  function start() {
-    if (scene.mode === "paused") { run(); return; }
-    scene.time = scene.score = scene.misses = 0;
-    scene.combo = scene.maxCombo = scene.perfectBounces = 0;
-    scene.chickens.length = scene.effects.length = scene.lost.length = 0;
-    scene.turtle.x = 300;
-    scene.turtle.impact = scene.shake = scene.turtle.vx = 0;
-    scene.turtle.facing = 1;
-    scene.turtle.shellHalf = SHELL_HALF;
-    waveTimer = 0.2;
-    waveCount = 0;
-    scene.wave = 1;
-    scene.level = 1;
-    bounces = endAge = 0;
-    inputMode = "keyboard";
+  function start(kind = "arcade") {
+    if (!canvasAvailable) return;
+    stop();
     release();
-    canvas.scrollIntoView({ block: "center", behavior: "instant" });
-    signal("start");
+    beginRound(scene, kind, signal);
+    stats();
+    renderer.draw(scene);
+    canvas.focus({ preventScroll: true });
+    announce(kind === "practice" ? "Öva tre studsar. Kalaset börjar om tre sekunder." : "Kalaset börjar om tre sekunder.");
     run();
   }
-
   function suspend() {
-    if (scene.mode !== "running") return;
-    cancelAnimationFrame(frame);
-    scene.mode = "paused";
+    if (!activeMode(scene.mode)) { release(); return; }
+    stop();
     release();
-    pause.textContent = "Fortsätt";
-    showPanel("FIKAPAUS", "INGEN STRESS. ÄN.",
-      "Spelet står still. Bärkan passar på att förklara varför pauser är viktiga. Länge.",
-      "FORTSÄTT KALASET ↗");
+    setPaused(scene, true);
     stats();
     renderer.draw(scene);
+    announce("Fikapaus. Spelet står still.");
   }
-
   function togglePause() {
-    if (scene.mode === "running") suspend();
-    else if (scene.mode === "paused") run();
+    if (scene.mode === "paused") {
+      stop();
+      release();
+      setPaused(scene, false);
+      stats();
+      renderer.draw(scene);
+      canvas.focus({ preventScroll: true });
+      announce("Kalaset fortsätter.");
+      run();
+    } else suspend();
   }
-
-  function end() {
-    scene.mode = "over";
-    endAge = 0;
-    pause.disabled = true;
+  function menu() {
+    stop();
     release();
-    const record = scene.score > best;
-    if (record) {
-      best = scene.score;
-      try { localStorage.setItem(RECORD_KEY, String(best)); } catch {}
-    }
-    showPanel(record ? "NYTT REKORD. RING TRANÅS TIDNING." : "TRE PLASK. ETT LÅNGT EFTERSNACK.",
-      `${scene.score} GÄSTER PÅ KALASET.`,
-      scene.score ? "Kycklingarna i vattnet fick badringar. De på land fick Bärkans livshistoria. Oklart vilka som hade mest tur." : "Ingen kom fram. Bärkan håller tal för en servett. Den har bett om notan.",
-      "EN RUNDA TILL ↗");
-    result.hidden = false;
-    root.querySelector("[data-result-score]").textContent = scene.score;
-    root.querySelector("[data-result-bounces]").textContent = bounces;
-    root.querySelector("[data-result-combo]").textContent = `${scene.maxCombo}×`;
-    root.querySelector("[data-result-perfect]").textContent = scene.perfectBounces;
-    signal("over");
+    scene = createGameState();
+    scene.reducedMotion = motion.matches;
     stats();
+    renderer.draw(scene);
+    announce("Till menyn. Välj kalas eller övning.");
     play.focus({ preventScroll: true });
   }
-
-  function effect(kind, x, y) {
-    scene.effects.push({ kind, x, y, age: 0, seed: scene.wave + bounces + scene.score });
-  }
-
-  function triggerNextWave() {
-    waveCount++;
-    scene.wave = waveCount;
-    scene.level = Math.floor((waveCount - 1) / 3) + 1;
-
-    // Klungstorlek (hur många kycklingar som hoppar samtidigt i flocken):
-    // Våg 1 kan ha 1-2 st, Våg 2 kan ha 4 st, Våg 3 kan ha 2 st, osv.
-    let clusterSize = 2;
-    if (waveCount === 1) {
-      clusterSize = scene.score < 1 ? (Math.random() < 0.5 ? 1 : 2) : 2;
-    } else if (scene.score < 5) {
-      const roll = Math.random();
-      clusterSize = roll < 0.45 ? 2 : roll < 0.80 ? 3 : 4;
-    } else {
-      const roll = Math.random();
-      clusterSize = roll < 0.30 ? 2 : roll < 0.65 ? 3 : 4;
-    }
-
-    // Tät formation inom klungan: 0.13s mellan varje fågel
-    // så de rör sig och studsar tillsammans på sköldpaddan som en flock!
-    const dtBurst = 0.13;
-    const spacingPx = WALK_SPEED * dtBurst; // ca 10px
-
-    // Första vågen startar nära kanten (x=120) så den hoppar direkt på under 1 sek!
-    const leadStartX = waveCount === 1 ? 120 : 50;
-
-    for (let i = 0; i < clusterSize; i++) {
-      const startX = leadStartX - i * spacingPx;
-      const yOffset = i === 0 ? 0 : (i % 2 === 1 ? -4 : 4);
-      let type = "normal";
-      if (scene.level >= 2 && Math.random() < 0.18) type = "gold";
-
-      scene.chickens.push({
-        id: ++released,
-        phase: "queued",
-        clusterId: waveCount,
-        clusterIndex: i,
-        x: startX,
-        y: CLIFF_Y + yOffset,
-        baseY: CLIFF_Y + yOffset,
-        vx: 0,
-        vy: 0,
-        bounces: 0,
-        age: i * 0.25,
-        rotation: 0,
-        g: GRAVITY,
-        type,
-      });
-    }
-
-    // Nästa våg-intervall skalas med poäng så att flera vågor är igång samtidigt:
-    if (scene.score < 3) waveTimer = 2.8;
-    else if (scene.score < 8) waveTimer = 2.2;
-    else if (scene.score < 18) waveTimer = 1.7;
-    else if (scene.score < 35) waveTimer = 1.4;
-    else waveTimer = 1.1;
-  }
-  function moveTurtle(x) {
-    const next = clamp(x, 260, 750);
-    const dx = next - scene.turtle.x;
-    if (Math.abs(dx) > 0.5) scene.turtle.facing = dx > 0 ? 1 : -1;
-    scene.turtle.vx = dx / STEP;
-    scene.turtle.x = next;
-  }
-
-  function update(dt) {
-    scene.time += dt;
-
-    // Keyboard / button movement:
-    let movingRight = heldKeys.has("ArrowRight") || heldKeys.has("KeyD");
-    let movingLeft = heldKeys.has("ArrowLeft") || heldKeys.has("KeyA");
-    for (const direction of heldPointers.values()) {
-      if (direction === 1) movingRight = true;
-      else movingLeft = true;
-    }
-    const dir = Number(movingRight) - Number(movingLeft);
-    if (dir) moveTurtle(scene.turtle.x + dir * 1400 * dt);
-    else scene.turtle.vx *= 0.8;
-
-    // Kontinuerlig våg-logik: Nya vågor startar löpande så flera vågor är i luften samtidigt!
-    const hasQueuedOnCliff = scene.chickens.some(c => c.phase === "queued");
-
-    if (!hasQueuedOnCliff) {
-      waveTimer -= dt;
-      if (waveTimer <= 0) {
-        const nextB1Time = scene.time + ((CLIFF_EDGE_X - (waveCount === 0 ? 120 : 50)) / WALK_SPEED) + 1.23;
-        const clash = scene.chickens.some(c => {
-          if (c.phase !== "flying" || c.bounces >= REQUIRED_BOUNCES) return false;
-          const tBounce = c.nextBounceTime || (scene.time + 0.9);
-          return Math.abs(nextB1Time - tBounce) < 0.40;
-        });
-
-        if (clash) {
-          waveTimer = 0.35;
-        } else {
-          triggerNextWave();
-        }
-      }
-    }
-
-    // Update chickens
-    for (let i = scene.chickens.length - 1; i >= 0; i--) {
-      const c = scene.chickens[i];
-      c.age += dt;
-
-      // Queued on cliff: walking towards the edge
-      if (c.phase === "queued") {
-        c.x += WALK_SPEED * dt;
-        if (c.x >= CLIFF_EDGE_X) {
-          c.phase = "flying";
-          c.x = CLIFF_EDGE_X;
-          c.y = c.baseY || CLIFF_Y;
-          c.vx = VX;
-          c.vy = LAUNCH_VY;
-          c.g = GRAVITY;
-          c.bounces = 0;
-          c.nextBounceTime = scene.time + 1.23;
-        }
-        continue;
-      }
-
-      // Landed on party platform: walking rightwards to the party
-      if (c.phase === "landed") {
-        c.x += 85 * dt;
-        if (c.x > W + 40) scene.chickens.splice(i, 1);
-        continue;
-      }
-
-      // Flying physics: constant and predictable trajectory
-      const oldFeet = c.y + FEET;
-      const oldX = c.x;
-
-      c.x += c.vx * dt;
-      c.y += c.vy * dt + 0.5 * GRAVITY * dt * dt;
-      c.vy += GRAVITY * dt;
-      c.rotation += dt * 2.8;
-      const newFeet = c.y + FEET;
-
-      // Check landing on party platform (after required bounces)
-      if (c.bounces >= REQUIRED_BOUNCES && c.x >= 870 && c.vy > 0 && newFeet >= 345) {
-        c.phase = "landed";
-        c.y = 338;
-        c.rotation = 0;
-        c.age = 0;
-
-        let points = 1;
-        if (c.type === "gold") points = 3;
-        scene.score += points;
-        scene.combo++;
-        if (scene.combo > scene.maxCombo) scene.maxCombo = scene.combo;
-
-        if (c.type === "gold") {
-          effect("gold", 900, 305);
-          signal("gold-save");
-        } else if (scene.combo >= 3) {
-          effect("save", 900, 315);
-          signal("combo");
-        } else {
-          effect("save", 900, 315);
-          signal("saved");
-        }
-        stats();
-        continue;
-      }
-
-      // Water surface bounce check
-      const crossed = c.vy > 0 && oldFeet <= SHELL_Y + 4 && newFeet >= SHELL_Y;
-      if (crossed) {
-        const hitFrac = Math.max(0, Math.min(1, (SHELL_Y - oldFeet) / (newFeet - oldFeet || 1)));
-        const hitX = oldX + c.vx * dt * hitFrac;
-        const dx = hitX - scene.turtle.x;
-        if (Math.abs(dx) <= SHELL_HALF) {
-          // Clean bounce on turtle shell
-          c.x = hitX;
-          c.y = SHELL_Y - FEET;
-          c.vy = -BOUNCE_VY;
-          c.bounces++;
-          c.nextBounceTime = scene.time + BOUNCE_TIME;
-          bounces++;
-          scene.combo++;
-          if (scene.combo > scene.maxCombo) scene.maxCombo = scene.combo;
-          scene.turtle.impact = 1;
-          const isSweet = Math.abs(dx) <= SHELL_HALF * 0.38;
-          if (isSweet) {
-            scene.perfectBounces++;
-            effect("perfect", hitX, SHELL_Y - 15);
-            signal("bounce-perfect");
-          } else {
-            effect("bounce", hitX, SHELL_Y);
-            signal("bounce");
-          }
-          const rem = dt * (1 - hitFrac);
-          c.x += c.vx * rem;
-          c.y += c.vy * rem + 0.5 * GRAVITY * rem * rem;
-          c.vy += GRAVITY * rem;
-          stats();
-          continue;
-        }
-      }
-
-      // Miss: splash in water
-      if (c.y > H - 35 || c.x > W + 30) {
-        scene.lost.push({ x: clamp(c.x, 205, 840) });
-        effect("splash", c.x, 505);
-        scene.chickens.splice(i, 1);
-        scene.misses++;
-        scene.combo = 0;
-        scene.shake = 1;
-        signal("splash");
-        stats();
-        if (scene.misses >= 3) {
-          end();
-          break;
-        }
-      }
-    }
-  }
-
-  function animateEffects(dt) {
-    scene.turtle.impact = Math.max(0, scene.turtle.impact - dt * 4);
-    scene.shake = Math.max(0, scene.shake - dt * 3);
-    for (let i = scene.effects.length - 1; i >= 0; i--) {
-      const e = scene.effects[i];
-      e.age += dt;
-      if (e.age > (e.kind === "perfect" || e.kind === "gold" ? 1.5 : 1.2)) {
-        scene.effects.splice(i, 1);
-      }
-    }
-  }
-
-  function tick(now) {
-    if (scene.mode !== "running" && scene.mode !== "over") return;
-    const delta = Math.min(0.1, Math.max(0, (now - last) / 1000));
-    last = now;
-    accumulator += delta;
-    while (accumulator >= STEP) {
-      if (scene.mode === "running") update(STEP);
-      else endAge += STEP;
-      animateEffects(STEP);
-      accumulator -= STEP;
-    }
-    renderer.draw(scene);
-    if (scene.mode === "running" || endAge < 1.2) frame = requestAnimationFrame(tick);
-  }
-
   function position(event) {
     const bounds = canvas.getBoundingClientRect();
-    const worldX = ((event.clientX - bounds.left) * W) / bounds.width;
-    moveTurtle(worldX);
+    if (bounds.width <= 0) return;
+    if (event.pointerType === "mouse" && (event.clientX < bounds.left || event.clientX > bounds.right || event.clientY < bounds.top || event.clientY > bounds.bottom)) return;
+    heldKeys.clear();
+    for (const [id, entry] of heldPointers) {
+      if (entry.button.hasPointerCapture(id)) entry.button.releasePointerCapture(id);
+    }
+    heldPointers.clear();
+    input.direction = 0;
+    input.targetX = ((event.clientX - bounds.left) * W) / bounds.width;
+  }
+  function setExpanded(value) {
+    if (expanded === value) return;
+    expanded = value;
+    if (value) {
+      previousOverflow = document.body.style.overflow;
+      previousFocus = document.activeElement;
+      document.body.style.overflow = "hidden";
+      game.setAttribute("role", "dialog");
+      game.setAttribute("aria-modal", "true");
+    } else {
+      document.body.style.overflow = previousOverflow;
+      game.setAttribute("role", "region");
+      game.removeAttribute("aria-modal");
+    }
+    game.classList.toggle("is-expanded", value);
+    expand.setAttribute("aria-pressed", String(value));
+    expand.setAttribute("aria-label", value ? "Lämna förstorat spelläge" : "Förstora spelet");
+    expand.innerHTML = value ? label("Tillbaka ↙", "Stäng ↙") : label("Förstora ↗", "Större ↗");
+    if (value) expand.focus({ preventScroll: true });
+    else if (previousFocus?.isConnected) previousFocus.focus({ preventScroll: true });
+  }
+  function syncSound() {
+    const unavailable = !masterSound || masterSound.disabled;
+    const enabled = !unavailable && masterSound.getAttribute("aria-pressed") === "true";
+    sound.disabled = unavailable;
+    sound.setAttribute("aria-pressed", String(enabled));
+    sound.setAttribute("aria-label", unavailable ? "Ljud saknas" : enabled ? "Stäng av spelljud" : "Slå på spelljud");
+    sound.textContent = unavailable ? "Ljud saknas" : enabled ? "Ljud på" : "Ljud av";
   }
 
-  listen(play, "click", start);
-  listen(pause, "click", togglePause);
-
-  listen(canvas, "pointerdown", (event) => {
-    if (scene.mode !== "running") return;
+  listen(root, "click", event => {
+    const button = event.target.closest("button");
+    if (!button || button.disabled) return;
+    if (button.hasAttribute("data-play") || button.hasAttribute("data-start-arcade")) start("arcade");
+    else if (button.hasAttribute("data-practice")) start("practice");
+    else if (button.hasAttribute("data-menu")) menu();
+    else if (button === pause || button === resume) togglePause();
+    else if (button === expand) setExpanded(!expanded);
+    else if (button === sound) masterSound?.click();
+  });
+  listen(portrait, "error", () => { portraitAvailable = false; portrait.hidden = true; });
+  listen(canvas, "pointerdown", event => {
+    if (!activeMode(scene.mode) || (event.pointerType === "mouse" && event.button !== 0)) return;
     event.preventDefault();
-    inputMode = event.pointerType;
     release();
-    canvas.focus({ preventScroll: true });
+    activePointer = event.pointerId;
     canvas.setPointerCapture(event.pointerId);
+    canvas.focus({ preventScroll: true });
     position(event);
   });
-
-  listen(canvas, "pointermove", (event) => {
-    if (scene.mode !== "running") return;
-    inputMode = event.pointerType;
-    position(event);
+  listen(canvas, "pointermove", event => {
+    if (!activeMode(scene.mode)) return;
+    if (event.pointerType === "mouse" || event.pointerId === activePointer) position(event);
   });
-
-  listen(window, "mousemove", (event) => {
-    if (scene.mode !== "running") return;
-    inputMode = "mouse";
-    position(event);
+  const pointerEnd = event => {
+    if (event.pointerId !== activePointer) return;
+    activePointer = null;
+    input.targetX = null;
+    if (canvas.hasPointerCapture(event.pointerId)) canvas.releasePointerCapture(event.pointerId);
+  };
+  for (const type of ["pointerup", "pointercancel", "lostpointercapture"]) listen(canvas, type, pointerEnd);
+  listen(canvas, "pointerleave", event => {
+    if (event.pointerType === "mouse") input.targetX = null;
   });
-
-  listen(window, "keydown", (event) => {
-    if (["INPUT", "TEXTAREA"].includes(event.target?.tagName)) return;
+  for (const button of arrowButtons) {
+    listen(button, "pointerdown", event => {
+      if (!activeMode(scene.mode)) return;
+      event.preventDefault();
+      if (!heldPointers.size) release();
+      button.setPointerCapture(event.pointerId);
+      heldPointers.set(event.pointerId, { direction: Number(button.dataset.direction), button });
+      updateDirection();
+    });
+    const up = event => {
+      heldPointers.delete(event.pointerId);
+      updateDirection();
+      if (button.hasPointerCapture(event.pointerId)) button.releasePointerCapture(event.pointerId);
+    };
+    for (const type of ["pointerup", "pointercancel", "lostpointercapture"]) listen(button, type, up);
+  }
+  listen(window, "keydown", event => {
+    if (expanded && event.code === "Tab") {
+      const buttons = [...game.querySelectorAll("button:not(:disabled)")].filter(button => button.getClientRects().length > 0);
+      if (buttons.length) {
+        const index = buttons.indexOf(document.activeElement);
+        const next = event.shiftKey ? (index <= 0 ? buttons.length - 1 : index - 1) : (index + 1) % buttons.length;
+        event.preventDefault();
+        buttons[next].focus({ preventScroll: true });
+      }
+      return;
+    }
+    if (!expanded && !game.contains(document.activeElement)) return;
+    if (event.target.closest("input, textarea, select, [contenteditable]:not([contenteditable='false'])")) return;
     if (event.code === "Escape") {
+      event.preventDefault();
       if (expanded) setExpanded(false);
       suspend();
       return;
     }
-    if (scene.mode === "running" && (event.code === "KeyP" || (event.code === "Space" && !["BUTTON", "A"].includes(event.target?.tagName)))) {
-      event.preventDefault();
-      if (!event.repeat) togglePause();
+    if (event.code === "Space" && event.target.closest("button, a, [role='button']")) return;
+    if (event.code === "KeyP" || event.code === "Space") {
+      if (activeMode(scene.mode) || scene.mode === "paused") {
+        event.preventDefault();
+        if (!event.repeat) togglePause();
+      }
       return;
     }
-    if (scene.mode === "paused" && (event.code === "KeyP" || event.code === "Space")) {
+    if (event.code === "KeyR" && scene.mode === "over") {
       event.preventDefault();
-      if (!event.repeat) run();
+      if (!event.repeat) start("arcade");
       return;
     }
-    if (scene.mode === "over" && (event.code === "KeyR" || (event.code === "Space" && event.target !== play))) {
+    if (DIRECTIONS.has(event.code) && activeMode(scene.mode)) {
       event.preventDefault();
-      start();
-      return;
-    }
-    if (scene.mode === "running" && ["ArrowLeft", "ArrowRight", "KeyA", "KeyD"].includes(event.code)) {
-      event.preventDefault();
-      inputMode = "keyboard";
+      if (input.targetX !== null || activePointer !== null || heldPointers.size) release();
       heldKeys.add(event.code);
+      updateDirection();
     }
   });
-
-  listen(window, "keyup", (event) => heldKeys.delete(event.code));
-  listen(canvas, "blur", release);
-
-  for (const button of root.querySelectorAll("[data-direction]")) {
-    listen(button, "pointerdown", (event) => {
-      if (scene.mode !== "running") return;
-      event.preventDefault();
-      inputMode = "touch";
-      button.setPointerCapture(event.pointerId);
-      heldPointers.set(event.pointerId, Number(button.dataset.direction));
-    });
-    const up = (event) => heldPointers.delete(event.pointerId);
-    listen(button, "pointerup", up);
-    listen(button, "pointercancel", up);
-    listen(button, "lostpointercapture", up);
-  }
-
-  function setExpanded(value) {
-    expanded = value;
-    if (value) {
-      previousOverflow = document.body.style.overflow;
-      document.body.style.overflow = "hidden";
-    } else document.body.style.overflow = previousOverflow;
-    game.classList.toggle("is-expanded", value);
-    expand.setAttribute("aria-pressed", String(value));
-    expand.setAttribute("aria-label", value ? "Lämna förstorat spelläge" : "Förstora spelet");
-    expand.textContent = value ? "Tillbaka ↙" : "Förstora ↗";
-    if (!value) canvas.scrollIntoView({ block: "center", behavior: "instant" });
-  }
-
-  listen(expand, "click", () => setExpanded(!expanded));
-
-  function syncSound() {
-    const enabled = masterSound?.getAttribute("aria-pressed") === "true";
-    sound.setAttribute("aria-pressed", String(enabled));
-    sound.setAttribute("aria-label", enabled ? "Stäng av spelljud" : "Slå på spelljud");
-    sound.textContent = enabled ? "Ljud på" : "Ljud av";
-  }
-
-  listen(sound, "click", () => masterSound?.click());
-  const soundObserver = new MutationObserver(syncSound);
-  if (masterSound) soundObserver.observe(masterSound, { attributes: true, attributeFilter: ["aria-pressed"] });
-  syncSound();
-
+  listen(window, "keyup", event => {
+    if (heldKeys.delete(event.code)) updateDirection();
+  });
+  listen(game, "focusout", event => {
+    if (!game.contains(event.relatedTarget)) release();
+  });
+  listen(document, "focusin", event => {
+    if (expanded && !game.contains(event.target)) expand.focus({ preventScroll: true });
+  });
   listen(document, "visibilitychange", () => { if (document.hidden) suspend(); });
-  listen(window, "blur", () => suspend());
-  listen(motion, "change", () => { scene.reducedMotion = motion.matches; renderer.draw(scene); });
-
+  listen(window, "blur", suspend);
+  listen(motion, "change", () => {
+    scene.reducedMotion = motion.matches;
+    renderer?.draw(scene);
+  });
+  const soundObserver = new MutationObserver(syncSound);
+  if (masterSound) soundObserver.observe(masterSound, { attributes: true, attributeFilter: ["aria-pressed", "disabled"] });
+  syncSound();
   stats();
-  renderer.draw(scene);
+  if (canvasAvailable) renderer.draw(scene);
+  else {
+    copy.hidden = false;
+    copy.textContent = "Spelet behöver Canvas 2D. Prova en aktuell version av Chrome, Firefox eller Safari.";
+    play.disabled = practice.disabled = true;
+  }
 
   return () => {
-    cancelAnimationFrame(frame);
+    disposed = true;
+    stop();
+    release();
     soundObserver.disconnect();
-    renderer.dispose();
-    cleanup.forEach((remove) => remove());
-    if (expanded) document.body.style.overflow = previousOverflow;
+    cleanup.forEach(remove => remove());
+    renderer?.dispose();
+    if (expanded) setExpanded(false);
   };
 }
