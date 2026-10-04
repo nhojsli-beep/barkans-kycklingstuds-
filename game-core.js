@@ -204,7 +204,7 @@ function advanceFlight(bird, dt) {
   bird.vy += RULES.gravity * dt;
 }
 
-function updateBird(state, bird, dt, startTime, turtleStart, turtleVelocity, turtleTarget, onSound) {
+function updateBird(state, bird, dt, startTime, turtleStart, turtleVelocity, turtleTarget, onSound, isPointer) {
   bird.age += dt;
   bird.impact = Math.max(0, bird.impact - dt * 5);
   let elapsed = 0;
@@ -239,7 +239,7 @@ function updateBird(state, bird, dt, startTime, turtleStart, turtleVelocity, tur
     const hitTime = clamp(fallTime(oldFeet, bird.vy, RULES.shellY), 0, remaining);
     const hitFrac = remaining ? hitTime / remaining : 0;
     const hitX = bird.x + bird.vx * remaining * hitFrac;
-    const turtleX = clamp(turtleStart + turtleVelocity * (elapsed + hitTime),
+    const turtleX = isPointer ? turtleTarget : clamp(turtleStart + turtleVelocity * (elapsed + hitTime),
       Math.min(turtleStart, turtleTarget), Math.max(turtleStart, turtleTarget));
     const distance = Math.abs(hitX - turtleX);
     if (distance > RULES.shellHalf + EPSILON) {
@@ -312,18 +312,20 @@ function fixedStep(state, dt, input, onSound) {
   updateWave(state, onSound);
   scheduleCluster(state);
   const turtleStart = state.turtle.x;
-  const target = input.targetX == null ? clamp(turtleStart + input.direction * RULES.turtleSpeed * dt,
-    RULES.turtleMinX, RULES.turtleMaxX) : clamp(input.targetX, RULES.turtleMinX, RULES.turtleMaxX);
+  const isPointer = input.targetX != null;
+  const target = isPointer ? clamp(input.targetX, RULES.turtleMinX, RULES.turtleMaxX) :
+    clamp(turtleStart + input.direction * RULES.turtleSpeed * dt, RULES.turtleMinX, RULES.turtleMaxX);
+  const nextX = isPointer ? target :
+    turtleStart + Math.sign(target - turtleStart) * Math.min(Math.abs(target - turtleStart), RULES.turtleSpeed * dt);
   const turtleVelocity = Math.sign(target - turtleStart) * RULES.turtleSpeed;
-  const nextX = turtleStart + Math.sign(target - turtleStart) * Math.min(Math.abs(target - turtleStart), RULES.turtleSpeed * dt);
-  state.turtle.vx = (nextX - turtleStart) / dt;
-  if (nextX !== turtleStart) state.turtle.facing = Math.sign(nextX - turtleStart);
+  state.turtle.vx = turtleVelocity;
+  if (Math.abs(nextX - turtleStart) > 0.01) state.turtle.facing = Math.sign(nextX - turtleStart);
   state.turtle.x = nextX;
   state.time += dt;
   // Release order is stable; identical trajectories do not overtake one another.
   for (let i = 0; i < state.chickens.length;) {
     const bird = state.chickens[i];
-    const keep = updateBird(state, bird, dt, startTime, turtleStart, turtleVelocity, target, onSound);
+    const keep = updateBird(state, bird, dt, startTime, turtleStart, turtleVelocity, target, onSound, isPointer);
     if (state.mode === "over") break;
     if (!keep) state.chickens.splice(i, 1);
     else { updatePreview(state, bird); i++; }
